@@ -7,7 +7,7 @@ import {
   RefreshCw, Code2, Zap, ImageIcon, X, ChevronDown,
   Plus, Upload, FileText, Brain, Bot, Cpu,
   Download, Copy, Eye, Check, RotateCcw,
-  Plug, BookOpen, Folder, Grid2X2, Menu, Rocket, Settings,
+  Plug, BookOpen, Folder, Grid2X2, KeyRound, Menu, Rocket, Settings,
 } from "lucide-react";
 import { PreviewWorkbench } from "@/components/lotus/preview-workbench";
 import { EditorWorkspace } from "@/components/lotus/editor-workspace";
@@ -619,7 +619,7 @@ export default function App({ initial }: LotusBuilderProps) {
           <button type="button" onClick={()=>{setView("preview");setMobileNavOpen(false)}} className="flex items-center gap-3 rounded-xl bg-[#fff0e5] px-4 py-3 text-left text-sm font-semibold text-[#3c2a20]"><Eye size={19}/>Preview</button>
           <Link href="/?section=deploy" className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-[#5f4a3f] hover:bg-[#fff6f0]"><Rocket size={19}/>Deploy</Link>
         </nav>
-        <nav className="mt-auto border-t border-[#eadfd8] pt-4"><Link href="/?section=settings" className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-[#5f4a3f] hover:bg-[#fff6f0]"><Settings size={19}/>Settings</Link></nav>
+        <nav className="mt-auto grid gap-1 border-t border-[#eadfd8] pt-4"><Link href="/?section=settings&tab=ai" className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-[#5f4a3f] hover:bg-[#fff6f0]"><KeyRound size={19}/>AI Provider</Link><Link href="/?section=settings" className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-[#5f4a3f] hover:bg-[#fff6f0]"><Settings size={19}/>Settings</Link></nav>
         <div className="mt-4 flex items-center gap-3 rounded-xl border border-[#eadfd8] bg-white px-3 py-3">
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#ffb887] text-sm font-semibold">{initial.userName.trim().slice(0,2).toUpperCase() || "DU"}</span>
           <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{initial.userName}</p><p className="text-xs text-[#806b60]">Account owner</p></div>

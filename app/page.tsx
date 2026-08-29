@@ -5,11 +5,12 @@ import { redirect } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ section?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<{ section?: string; tab?: string }> }) {
   const session = await getCurrentSession()
   if (!session) redirect('/sign-in')
   const dashboard = await getProjectDashboard()
-  const requestedSection = (await searchParams).section
+  const params = await searchParams
+  const requestedSection = params.section
   const initialSection = ['projects', 'templates', 'preview', 'deploy', 'settings'].includes(requestedSection ?? '')
     ? requestedSection as 'projects' | 'templates' | 'preview' | 'deploy' | 'settings'
     : 'projects'
@@ -20,6 +21,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
       initialSettings={dashboard.settings}
       userName={session.user.name}
       initialSection={initialSection}
+      initialSettingsTab={params.tab === 'ai' ? 'AI Provider' : undefined}
     />
   )
 }
