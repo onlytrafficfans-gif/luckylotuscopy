@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
 import { Download, Expand, Maximize2, Monitor, Move, RefreshCw, RotateCw, Smartphone, Tablet } from 'lucide-react'
 import { LivePreview } from '@/components/lotus/live-preview'
 import { previewViewport, type PreviewDevice, type PreviewDiagnostic, type PreviewOrientation } from '@/lib/preview-runtime'
@@ -169,19 +169,24 @@ export function PreviewWorkbench({ html, diagnostics = [], initialDevice = 'phon
   }
 
   function chooseDevice(nextDevice: PreviewDevice) {
-    setDevice(nextDevice)
-    setOrientation(nextDevice === 'desktop' ? 'landscape' : 'portrait')
-    setPosition({ x: 0, y: 0 })
-    setFitToStage(true)
+    if (nextDevice === device) return
+    startTransition(() => {
+      setDevice(nextDevice)
+      setOrientation(nextDevice === 'desktop' ? 'landscape' : 'portrait')
+      setPosition({ x: 0, y: 0 })
+      setFitToStage(true)
+    })
   }
 
   function choosePreset(width: number, height: number) {
-    setDevice('custom')
-    setOrientation(width >= height ? 'landscape' : 'portrait')
-    setCustomWidth(width)
-    setCustomHeight(height)
-    setPosition({ x: 0, y: 0 })
-    setFitToStage(true)
+    startTransition(() => {
+      setDevice('custom')
+      setOrientation(width >= height ? 'landscape' : 'portrait')
+      setCustomWidth(width)
+      setCustomHeight(height)
+      setPosition({ x: 0, y: 0 })
+      setFitToStage(true)
+    })
   }
 
   return <section aria-label="Preview workbench" className="flex h-full min-h-0 flex-col bg-white">
@@ -220,7 +225,7 @@ export function PreviewWorkbench({ html, diagnostics = [], initialDevice = 'phon
     </div>
 
     <div ref={stageRef} data-testid="preview-stage" className="relative min-h-0 flex-1 overflow-auto bg-[radial-gradient(circle_at_48%_20%,rgba(255,255,255,0.96),transparent_28%),radial-gradient(circle_at_15%_80%,rgba(248,187,149,0.5),transparent_38%),radial-gradient(circle_at_88%_75%,rgba(255,215,190,0.66),transparent_42%),linear-gradient(135deg,#fff9f5_0%,#f8dfd0_55%,#fff7f1_100%)] p-4 sm:p-6">
-      <div data-testid="preview-frame-slot" className="relative mx-auto" style={{ width: renderedWidth, height: renderedHeight }}>
+      <div data-testid="preview-frame-slot" className="relative mx-auto" style={{ width: renderedWidth, height: renderedHeight, contain: 'layout paint style' }}>
        <div
         role="region"
         aria-label={device === 'phone' ? 'Phone preview screen' : device === 'tablet' ? 'Tablet preview screen' : 'Desktop preview screen'}
