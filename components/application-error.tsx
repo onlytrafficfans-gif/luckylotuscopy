@@ -16,7 +16,7 @@ export function ApplicationError({ message = 'Something went wrong. Please try a
   return (
     <main className="min-h-svh grid place-items-center bg-background px-6 text-center">
       <section className="max-w-md space-y-4">
-        <h1 className="text-2xl font-semibold text-foreground">We couldn&apos;t load Lotus</h1>
+        <h1 className="text-2xl font-semibold text-foreground">We couldn&apos;t load Lucky Lotus</h1>
         <p className="text-sm leading-6 text-muted-foreground">{message}</p>
         {reset && (
           <button

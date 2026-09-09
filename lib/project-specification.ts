@@ -111,7 +111,7 @@ function validateReferences(specification: ProjectSpecification) {
     if (target.framework !== expectedFramework) throw new ProjectSpecificationError(`${target.platform} targets must use ${expectedFramework}.`)
   }
   if (!specification.targets.some((target) => target.enabled && target.platform !== 'api')) {
-    throw new ProjectSpecificationError('A Lotus project needs at least one user interface target.')
+    throw new ProjectSpecificationError('A Lucky Lotus project needs at least one user interface target.')
   }
 
   assertUniqueIds(specification.screens, 'screen')
@@ -203,7 +203,7 @@ export function createProjectSpecification(input: {
 }): ProjectSpecification {
   const targets = [...new Set(input.targets)]
   if (!targets.some((target) => target !== 'api')) {
-    throw new ProjectSpecificationError('A Lotus project needs at least one user interface target.')
+    throw new ProjectSpecificationError('A Lucky Lotus project needs at least one user interface target.')
   }
 
   return parseProjectSpecification({

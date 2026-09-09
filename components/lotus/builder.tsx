@@ -20,7 +20,7 @@ import Link from "next/link";
 import { assembleStaticPreview, type PreviewDiagnostic } from "@/lib/preview-runtime";
 import { AuthSignOut } from "@/components/auth-sign-out";
 
-const logoLotus = "/logo_lotus.png";
+const logoLotus = "/lucky-lotus-logo.png";
 
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -128,7 +128,7 @@ const PLUS_ITEMS = [
 ];
 
 const INIT_MESSAGES: ChatMessage[] = [
-  { id:"1", role:"assistant", content:"Welcome to Lotus. Describe the app you want to build — I'll bring it to life.", ts: new Date(Date.now()-120000) },
+  { id:"1", role:"assistant", content:"Welcome to Lucky Lotus. Describe the app you want to build — I'll bring it to life.", ts: new Date(Date.now()-120000) },
 ];
 
 
@@ -607,10 +607,10 @@ export default function App({ initial }: LotusBuilderProps) {
     <div className="relative size-full flex flex-col overflow-hidden bg-[#fffdfb] text-[#241b16] lg:pl-[248px]" style={{ fontFamily:"Outfit,sans-serif" }}>
 
       {mobileNavOpen && <button type="button" aria-label="Close navigation overlay" onClick={()=>setMobileNavOpen(false)} className="fixed inset-0 z-40 bg-black/25 lg:hidden"/>}
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[248px] flex-col border-r border-[#eadfd8] bg-[#fffcfa] px-5 pb-5 pt-7 transition-transform lg:translate-x-0 ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}`} aria-label="Lotus navigation">
+      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[248px] flex-col border-r border-[#eadfd8] bg-[#fffcfa] px-5 pb-5 pt-7 transition-transform lg:translate-x-0 ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}`} aria-label="Lucky Lotus navigation">
         <button type="button" onClick={()=>setMobileNavOpen(false)} aria-label="Close navigation" className="absolute right-3 top-3 rounded-lg p-2 lg:hidden"><X size={18}/></button>
         <div className="flex flex-col items-center pt-2">
-          <Image src={logoLotus} alt="Lotus" width={124} height={124} loading="eager" className="h-[124px] w-[124px] object-contain" />
+          <Image src={logoLotus} alt="Lucky Lotus" width={124} height={124} loading="eager" className="h-[124px] w-[124px] object-contain" />
           <p className="-mt-1 text-[10px] font-semibold tracking-[0.32em] text-[#5d4538]">APP BUILDER</p>
         </div>
         <nav className="mt-8 grid gap-1.5">

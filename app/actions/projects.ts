@@ -324,7 +324,7 @@ export async function restoreProjectFileAction(projectId: string, fileId: string
   return fileDto(restored)
 }
 
-// Friendly model labels from the Lotus UI -> AI Gateway model ids.
+// Friendly model labels from the Lucky Lotus UI -> AI Gateway model ids.
 const MODEL_MAP: Record<string, string> = {
   'Enigma Auto': 'anthropic/claude-sonnet-4.5',
   'GPT-4.1': 'openai/gpt-4.1',
@@ -338,7 +338,7 @@ function resolveModel(label: string) {
   return MODEL_MAP[label] ?? 'anthropic/claude-sonnet-4.5'
 }
 
-const SYSTEM_PROMPT = `You are Lotus, an expert AI app builder. You generate a SINGLE, complete, self-contained HTML document that renders a polished, production-quality app screen.
+const SYSTEM_PROMPT = `You are Lucky Lotus, an expert AI app builder. You generate a SINGLE, complete, self-contained HTML document that renders a polished, production-quality app screen.
 
 Hard rules:
 - Output ONLY the raw HTML document. Start with <!DOCTYPE html>. No markdown fences, no commentary before or after.
@@ -481,7 +481,7 @@ export async function runBuild(input: RunBuildInput): Promise<RunBuildResult> {
   const safeCurrentHtml = input.currentHtml ? redactSensitiveValues(entry.content) : null
   const specification = await projects.getSpecification(userId, projectId)
   const safeSpecification = redactSensitiveValues(JSON.stringify(specification))
-  const specificationBlock = `\n\nLotus project specification (treat this as the product contract; render the current web preview from it):\n${safeSpecification}`
+  const specificationBlock = `\n\nLucky Lotus project specification (treat this as the product contract; render the current web preview from it):\n${safeSpecification}`
 
   // Persist the user's message immediately.
   await appendProjectMessage({
@@ -495,7 +495,7 @@ export async function runBuild(input: RunBuildInput): Promise<RunBuildResult> {
   // Build the prompt for the model, giving it the current app as context.
   const componentMode = runtime.runtime === 'react'
   const frameworkInstruction = componentMode
-    ? `Return only the complete React JSX module for ${generationEntry}. Use React and browser APIs only; do not import framework-specific server modules. The project framework is ${runtime.framework}, rendered through Lotus's React preview adapter.`
+    ? `Return only the complete React JSX module for ${generationEntry}. Use React and browser APIs only; do not import framework-specific server modules. The project framework is ${runtime.framework}, rendered through Lucky Lotus's React preview adapter.`
     : 'Return only a complete self-contained HTML document.'
   const userContent = safeCurrentHtml
     ? `Here is the current ${componentMode ? 'React component' : 'HTML document'}:\n\n${safeCurrentHtml}\n\n---\n\nApply this change. ${frameworkInstruction}\n${safePrompt}${safeContextBlock}${specificationBlock}`
@@ -506,7 +506,7 @@ export async function runBuild(input: RunBuildInput): Promise<RunBuildResult> {
     const providerConfig = decryptAiProviderConfig((await cookies()).get(AI_PROVIDER_COOKIE)?.value, userId)
     const { text } = await generateText({
       model: generationModel(providerConfig, resolveModel(model)),
-      system: componentMode ? 'You are Lotus, an expert React application builder. Generate one complete, accessible React component module for a secure browser preview. Return code only.' : SYSTEM_PROMPT,
+      system: componentMode ? 'You are Lucky Lotus, an expert React application builder. Generate one complete, accessible React component module for a secure browser preview. Return code only.' : SYSTEM_PROMPT,
       prompt: userContent,
       maxOutputTokens: 8000,
     })
@@ -560,11 +560,11 @@ export async function runBuildAction(input: RunBuildInput): Promise<RunBuildActi
 
 function publicBuildError(message: string) {
   if (/credit card|AI generation is not enabled/i.test(message)) return message
-  if (/changed elsewhere/i.test(message)) return 'This project changed while Lotus was building. Please try your request again.'
+  if (/changed elsewhere/i.test(message)) return 'This project changed while Lucky Lotus was building. Please try your request again.'
   if (/Generation failed/i.test(message)) return message
   if (/rejected its API key/i.test(message)) return message
   if (/not active/i.test(message)) return 'This project is not active. Restore it before building.'
-  return 'Lotus could not complete this build. Please try again.'
+  return 'Lucky Lotus could not complete this build. Please try again.'
 }
 
 export async function buildProjectPreviewAction(projectId: string, revision = 0, sessionId = 'default'): Promise<PreviewBuild> {

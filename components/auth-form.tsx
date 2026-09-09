@@ -7,9 +7,8 @@ import { authClient } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card } from '@/components/ui/card'
 import Image from 'next/image'
-import { Check, Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, ShieldCheck } from 'lucide-react'
 
 export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
   const router = useRouter()
@@ -48,34 +47,28 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
   }
 
   return (
-    <main className="grid min-h-svh place-items-center bg-[#fffaf7] px-4 py-10 text-[#281f1a]">
-      <Card className="grid w-full max-w-4xl overflow-hidden border-[#eadfd8] bg-white p-0 shadow-[0_24px_80px_rgba(72,45,31,.12)] md:grid-cols-[.9fr_1.1fr]">
-        <section className="hidden bg-[#241b16] p-10 text-white md:flex md:flex-col">
-          <Image src="/logo_lotus.png" alt="Lotus App Builder" width={112} height={112} className="h-28 w-28 object-contain" priority/>
-          <h2 className="mt-8 text-3xl font-bold tracking-tight">Your ideas belong in your workspace.</h2>
-          <p className="mt-4 text-sm leading-6 text-white/65">Every project, template, connection, and deployment setting stays isolated to your account.</p>
-          <ul className="mt-auto grid gap-4 pt-12 text-sm">{['Private project ownership','Secure HTTP-only sessions','Seven-day session continuity'].map(item=><li key={item} className="flex items-center gap-3"><span className="grid h-6 w-6 place-items-center rounded-full bg-[#ef916a] text-white"><Check size={14}/></span>{item}</li>)}</ul>
-        </section>
-        <section className="p-6 sm:p-10">
-          <div className="mb-7 md:hidden"><Image src="/logo_lotus.png" alt="Lotus App Builder" width={80} height={80} className="h-20 w-20 object-contain" priority/></div>
-          <div className="mb-7">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+    <main className="relative grid min-h-svh place-items-center overflow-hidden bg-[#070605] px-4 py-8 text-white sm:px-8 lg:justify-items-end lg:px-[7vw]">
+      <Image src="/lucky-lotus-login-bg.png" alt="Lucky Lotus garden at sunset" fill priority sizes="100vw" className="object-cover object-[48%_center]"/>
+      <section className="relative z-10 w-full max-w-[430px] rounded-[28px] border border-[#d99a45]/45 bg-[#090806]/[.92] p-6 shadow-[0_32px_100px_rgba(0,0,0,.72)] backdrop-blur-md sm:p-9">
+        <div className="flex justify-center"><Image src="/lucky-lotus-logo.png" alt="Lucky Lotus" width={260} height={180} className="h-auto w-[210px] object-contain drop-shadow-[0_8px_24px_rgba(235,156,47,.28)]" priority/></div>
+        <div className="mt-4 text-center">
+          <h1 className="font-serif text-3xl font-semibold tracking-[.01em] text-[#fff8ea]">
             {isSignUp ? 'Create an account' : 'Welcome back'}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="mt-2 text-sm text-[#d9c9b4]">
             {isSignUp
-              ? 'Create your private Lotus workspace.'
-              : 'Sign in to continue building.'}
+              ? 'Create your private Lucky Lotus workspace.'
+              : 'Sign in to continue to Lucky Lotus.'}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="mt-7 flex flex-col gap-4">
           {isSignUp && (
             <div className="flex flex-col gap-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name" className="text-[#f6e9d5]">Name</Label>
               <Input
                 id="name"
-                className="h-10 bg-[var(--input-background)] border-[rgba(44,34,20,0.18)]"
+                className="h-12 border-[#d8a45f]/45 bg-white/[.08] text-white focus-visible:border-[#efb85f] focus-visible:ring-[#efb85f]/25"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -84,10 +77,10 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
             </div>
           )}
           <div className="flex flex-col gap-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="text-[#f6e9d5]">Email address</Label>
             <Input
               id="email"
-              className="h-10 bg-[var(--input-background)] border-[rgba(44,34,20,0.18)]"
+              className="h-12 border-[#d8a45f]/45 bg-white/[.08] text-white focus-visible:border-[#efb85f] focus-visible:ring-[#efb85f]/25"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -96,10 +89,10 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
+            <Label htmlFor="password" className="text-[#f6e9d5]">Password</Label>
+            <div className="relative"><Input
               id="password"
-              className="h-10 bg-[var(--input-background)] border-[rgba(44,34,20,0.18)]"
+              className="h-12 border-[#d8a45f]/45 bg-white/[.08] pr-12 text-white focus-visible:border-[#efb85f] focus-visible:ring-[#efb85f]/25"
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -107,17 +100,17 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
               minLength={8}
               maxLength={128}
               autoComplete={isSignUp ? 'new-password' : 'current-password'}
-            /><button type="button" onClick={()=>setShowPassword(value=>!value)} className="self-end text-xs font-medium text-[#8a5a43]" aria-label={showPassword?'Hide password':'Show password'}>{showPassword?<><EyeOff className="mr-1 inline" size={14}/>Hide</>:<><Eye className="mr-1 inline" size={14}/>Show</>}</button>
+            /><button type="button" onClick={()=>setShowPassword(value=>!value)} className="absolute inset-y-0 right-0 grid w-12 place-items-center text-[#d7b779] hover:text-[#ffd98f]" aria-label={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></div>
           </div>
-          {isSignUp && <div className="flex flex-col gap-2"><Label htmlFor="confirm-password">Confirm password</Label><Input id="confirm-password" className="h-10 bg-[var(--input-background)] border-[rgba(44,34,20,0.18)]" type={showPassword?'text':'password'} value={confirmPassword} onChange={(event)=>setConfirmPassword(event.target.value)} required minLength={8} maxLength={128} autoComplete="new-password"/></div>}
+          {isSignUp && <div className="flex flex-col gap-2"><Label htmlFor="confirm-password" className="text-[#f6e9d5]">Confirm password</Label><Input id="confirm-password" className="h-12 border-[#d8a45f]/45 bg-white/[.08] text-white focus-visible:border-[#efb85f] focus-visible:ring-[#efb85f]/25" type={showPassword?'text':'password'} value={confirmPassword} onChange={(event)=>setConfirmPassword(event.target.value)} required minLength={8} maxLength={128} autoComplete="new-password"/></div>}
 
           {error && (
-            <p className="text-sm text-destructive" role="alert">
+            <p className="rounded-lg border border-red-400/30 bg-red-950/50 px-3 py-2 text-sm text-red-200" role="alert">
               {error}
             </p>
           )}
 
-          <Button type="submit" disabled={loading} className="w-full">
+          <Button type="submit" disabled={loading} className="mt-2 h-12 w-full border border-[#ffce73] bg-[linear-gradient(135deg,#8f4e12,#e5a23b_48%,#8c4a11)] text-sm font-bold text-[#140c03] shadow-[0_10px_30px_rgba(214,137,36,.28)] hover:brightness-110">
             {loading
               ? 'Please wait...'
               : isSignUp
@@ -126,17 +119,17 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
           </Button>
         </form>
 
-        <p className="text-sm text-muted-foreground text-center mt-6">
+        <p className="mt-6 text-center text-sm text-[#cdbda8]">
           {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
           <Link
             href={isSignUp ? '/sign-in' : '/sign-up'}
-            className="text-foreground font-medium underline-offset-4 hover:underline"
+            className="font-semibold text-[#f4bd63] underline-offset-4 hover:underline"
           >
             {isSignUp ? 'Sign in' : 'Sign up'}
           </Link>
         </p>
-        </section>
-      </Card>
+        <p className="mt-6 flex items-center justify-center gap-2 text-center text-xs text-[#a99883]"><ShieldCheck size={14}/>Your workspace stays private and encrypted.</p>
+      </section>
     </main>
   )
 }

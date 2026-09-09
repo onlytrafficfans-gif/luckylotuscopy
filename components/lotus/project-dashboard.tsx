@@ -133,8 +133,8 @@ export function ProjectDashboard({ initialProjects, initialSettings, userName }:
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2.5">
-            <Image src="/logo_lotus.png" alt="Lotus" width={42} height={42} />
-            <span className="font-serif text-2xl font-medium">Lotus</span>
+            <Image src="/lucky-lotus-logo.png" alt="Lucky Lotus" width={42} height={42} />
+            <span className="font-serif text-2xl font-medium">Lucky Lotus</span>
           </div>
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setSettingsOpen((open) => !open)} aria-expanded={settingsOpen} aria-controls="project-settings" className="rounded-lg p-2 hover:bg-muted focus-visible:outline-2" aria-label="Open settings">
@@ -167,7 +167,7 @@ export function ProjectDashboard({ initialProjects, initialSettings, userName }:
         {error && <p role="alert" className="mt-5 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
 
         {firstRun ? <section className="mt-8 rounded-2xl border border-border bg-card p-8 text-center sm:p-12">
-          <p className="text-sm font-medium text-accent">Welcome to Lotus</p>
+          <p className="text-sm font-medium text-accent">Welcome to Lucky Lotus</p>
           <h2 className="mt-2 font-serif text-3xl">Start with a blank project</h2>
           <p className="mx-auto mt-3 max-w-xl text-muted-foreground">Create a project, then build and preview it in the shared public workspace.</p>
           <button type="button" onClick={createProject} disabled={pending} className="mt-6 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground disabled:opacity-60">Create your first project</button>

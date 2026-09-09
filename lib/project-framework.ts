@@ -18,13 +18,13 @@ export const PROJECT_FRAMEWORKS: Array<{ id: ProjectFramework; label: string; de
 type StarterFile = { path: string; content: string }
 
 const staticFiles: StarterFile[] = [
-  { path: 'index.html', content: '<!doctype html>\n<html lang="en">\n  <head>\n    <meta charset="utf-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1">\n    <title>Lotus app</title>\n    <link rel="stylesheet" href="styles.css">\n  </head>\n  <body>\n    <main><h1>Start building</h1></main>\n    <script src="script.js"></script>\n  </body>\n</html>\n' },
+  { path: 'index.html', content: '<!doctype html>\n<html lang="en">\n  <head>\n    <meta charset="utf-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1">\n    <title>Lucky Lotus app</title>\n    <link rel="stylesheet" href="styles.css">\n  </head>\n  <body>\n    <main><h1>Start building</h1></main>\n    <script src="script.js"></script>\n  </body>\n</html>\n' },
   { path: 'styles.css', content: ':root { font-family: system-ui, sans-serif; }\nbody { margin: 0; padding: 2rem; }\n' },
-  { path: 'script.js', content: 'console.info("Lotus starter ready")\n' },
+  { path: 'script.js', content: 'console.info("Lucky Lotus starter ready")\n' },
 ]
 
 const reactFiles: StarterFile[] = [
-  { path: 'index.html', content: '<!doctype html>\n<html lang="en">\n  <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Lotus app</title></head>\n  <body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body>\n</html>\n' },
+  { path: 'index.html', content: '<!doctype html>\n<html lang="en">\n  <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Lucky Lotus app</title></head>\n  <body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body>\n</html>\n' },
   { path: 'src/main.jsx', content: "import React from 'react'\nimport { createRoot } from 'react-dom/client'\nimport App from './App.jsx'\nimport './styles.css'\n\ncreateRoot(document.getElementById('root')).render(<App />)\n" },
   { path: 'src/App.jsx', content: "export default function App() {\n  return <main className=\"app\"><h1>Start building</h1></main>\n}\n" },
   { path: 'src/styles.css', content: ':root { font-family: Inter, system-ui, sans-serif; }\n* { box-sizing: border-box; }\nbody { margin: 0; }\n.app { min-height: 100vh; display: grid; place-items: center; padding: 2rem; }\n' },

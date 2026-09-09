@@ -7,7 +7,7 @@ export default function NotFound() {
         <p className="text-sm font-medium text-accent">404</p>
         <h1 className="text-2xl font-semibold text-foreground">This page does not exist</h1>
         <Link className="inline-block rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground" href="/">
-          Return to Lotus
+          Return to Lucky Lotus
         </Link>
       </section>
     </main>

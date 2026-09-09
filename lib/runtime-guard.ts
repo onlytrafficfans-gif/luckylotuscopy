@@ -25,7 +25,7 @@ function guardSource(guardName: string, stateName: string, nowName: string, queu
   return `${GUARD_MARKER}
 var ${stateName}={count:0,scheduled:false,start:0};
 var ${nowName}=performance.now.bind(performance),${queueName}=queueMicrotask.bind(globalThis);
-function ${guardName}(){var state=${stateName};if(!state.scheduled){state.scheduled=true;state.start=${nowName}();${queueName}(function(){state.count=0;state.scheduled=false})}state.count++;if(state.count%1024===0&&${nowName}()-state.start>100){throw new Error('Lotus preview execution budget exceeded')}};
+function ${guardName}(){var state=${stateName};if(!state.scheduled){state.scheduled=true;state.start=${nowName}();${queueName}(function(){state.count=0;state.scheduled=false})}state.count++;if(state.count%1024===0&&${nowName}()-state.start>100){throw new Error('Lucky Lotus preview execution budget exceeded')}};
 `
 }
 

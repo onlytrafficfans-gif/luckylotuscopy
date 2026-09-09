@@ -79,7 +79,7 @@ export function IntegrationSettings({ providerIds = ['github', 'vercel', 'supaba
   return <div>
     <div className="mb-4 flex items-start gap-3 rounded-xl bg-[#fff7f1] p-3 text-sm dark:bg-white/5">
       <ShieldCheck className="mt-0.5 shrink-0 text-[#b87850]" size={18}/>
-      <p className="leading-5 text-[#6d584d] dark:text-[#c8b8ae]">Lotus verifies each credential with its provider, encrypts it before database storage, and never sends the saved value back to the browser.</p>
+      <p className="leading-5 text-[#6d584d] dark:text-[#c8b8ae]">Lucky Lotus verifies each credential with its provider, encrypts it before database storage, and never sends the saved value back to the browser.</p>
     </div>
     {message && <div role="status" className={`mb-4 rounded-xl border px-3 py-2 text-sm ${/connected and verified/i.test(message) ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>{message}</div>}
     <div className="grid gap-3">
