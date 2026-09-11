@@ -199,6 +199,21 @@ export function createPostgresProjectService(pool: Pool) {
       const created = await row<{ createdAt:Date }>(pool, 'INSERT INTO project_checkpoint (id, "projectId", label, files, runtime, specification) VALUES ($1, $2, $3, $4, $5, $6) RETURNING "createdAt"', [checkpointId, projectId, checkpointLabel, files, runtime, specification.specification])
       return { id: checkpointId, projectId, label: checkpointLabel, fileCount: files.length, createdAt: created?.createdAt ?? new Date() }
     },
+    async applyFileBundle(userId: string, projectId: string, inputs: ProjectFileInput[]) {
+      return postgresTransaction(async client => {
+        await writable(client,userId,projectId)
+        if (!Array.isArray(inputs)||inputs.length===0||inputs.length>100) throw new ProjectLifecycleError('Generated bundle must contain between 1 and 100 files.')
+        const files=inputs.map(validateFileInput)
+        if(new Set(files.map(file=>file.path)).size!==files.length) throw new ProjectLifecycleError('Generated bundle contains duplicate file paths.')
+        const replaced=files.map(file=>file.path)
+        const current=await row<{total:string}>(client,'SELECT COALESCE(SUM(size),0)::text total FROM project_file WHERE "projectId"=$1 AND "deletedAt" IS NULL AND NOT(path=ANY($2::text[]))',[projectId,replaced])
+        if(Number(current?.total??0)+files.reduce((total,file)=>total+file.bytes,0)>MAX_PROJECT_BYTES) throw new ProjectLifecycleError('Project size limit exceeded.')
+        const output:ProjectFile[]=[]
+        for(const file of files){const saved=await row<ProjectFile>(client,`INSERT INTO project_file (id,"projectId",path,content,encoding,size) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT ("projectId",path) WHERE "deletedAt" IS NULL DO UPDATE SET content=EXCLUDED.content,encoding=EXCLUDED.encoding,size=EXCLUDED.size,"updatedAt"=now() RETURNING *`,[id(),projectId,file.path,file.content,file.encoding,file.bytes]);if(saved)output.push(saved)}
+        await touch(client,projectId)
+        return output
+      })
+    },
     async listCheckpoints(userId: string, projectId: string) {
       await owned(pool, userId, projectId)
       const checkpoints = await rows<{ id:string; projectId:string; label:string; fileCount:number; createdAt:Date }>(pool, 'SELECT id, "projectId", label, jsonb_array_length(files)::int AS "fileCount", "createdAt" FROM project_checkpoint WHERE "projectId" = $1 ORDER BY "createdAt" DESC', [projectId])

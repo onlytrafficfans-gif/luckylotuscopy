@@ -329,6 +329,29 @@ export function createProjectService(database: ProjectDatabase) {
       sqlite.prepare('INSERT INTO project_checkpoint (id, projectId, label, files, runtime, specification, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)').run(checkpoint.id, checkpoint.projectId, checkpoint.label, checkpoint.files, checkpoint.runtime, checkpoint.specification, checkpoint.createdAt)
       return { id: checkpoint.id, projectId, label: checkpoint.label, fileCount: files.length, createdAt: new Date(checkpoint.createdAt) }
     },
+    async applyFileBundle(userId: string, projectId: string, inputs: ProjectFileInput[]) {
+      return withTransaction(() => {
+        assertWritableProject(userId, projectId)
+        if (!Array.isArray(inputs) || inputs.length === 0 || inputs.length > 100) throw new ProjectLifecycleError('Generated bundle must contain between 1 and 100 files.')
+        const files = inputs.map(validateFileInput)
+        if (new Set(files.map(file=>file.path)).size !== files.length) throw new ProjectLifecycleError('Generated bundle contains duplicate file paths.')
+        const existingTotal = (sqlite.prepare('SELECT COALESCE(SUM(size),0) total FROM project_file WHERE projectId = ? AND deletedAt IS NULL AND path NOT IN (' + files.map(()=>'?').join(',') + ')').get(projectId,...files.map(file=>file.path)) as { total:number }).total
+        if (existingTotal + files.reduce((total,file)=>total+file.bytes,0) > MAX_PROJECT_BYTES) throw new ProjectLifecycleError('Project size limit exceeded.')
+        const now = Date.now()
+        const select = sqlite.prepare('SELECT id FROM project_file WHERE projectId = ? AND path = ? AND deletedAt IS NULL')
+        const update = sqlite.prepare('UPDATE project_file SET content = ?, encoding = ?, size = ?, updatedAt = ? WHERE id = ?')
+        const insert = sqlite.prepare('INSERT INTO project_file (id, projectId, path, content, encoding, size, originalPath, deletedAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)')
+        const output: ProjectFile[] = []
+        for (const file of files) {
+          const found = select.get(projectId,file.path) as { id:string }|undefined
+          const fileId = found?.id ?? newId()
+          if (found) update.run(file.content,file.encoding,file.bytes,now,fileId); else insert.run(fileId,projectId,file.path,file.content,file.encoding,file.bytes,now,now)
+          output.push(fileFromRow({ id:fileId, projectId, path:file.path, content:file.content, encoding:file.encoding, size:file.bytes, originalPath:null, deletedAt:null, createdAt:now, updatedAt:now }))
+        }
+        touchProject(projectId,now)
+        return output
+      })
+    },
     async listCheckpoints(userId: string, projectId: string) {
       await owned(userId, projectId)
       const rows = sqlite.prepare('SELECT id, projectId, label, files, createdAt FROM project_checkpoint WHERE projectId = ? ORDER BY createdAt DESC').all(projectId) as Array<{ id:string; projectId:string; label:string; files:string; createdAt:number }>
