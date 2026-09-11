@@ -11,21 +11,15 @@ vi.mock('@/lib/auth-client', () => ({ authClient: { signIn: { email: vi.fn() }, 
 afterEach(() => cleanup())
 
 describe('AuthForm landing flow', () => {
-  it('shows the full artwork before opening either form', () => {
+  it('opens a centered clear sign-in panel over the full artwork', () => {
     render(<AuthForm />)
-    expect(screen.getByAltText('Lucky Lotus garden at sunset')).toHaveClass('object-contain')
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Sign up' })).toBeInTheDocument()
+    expect(screen.getByAltText('Lucky Lotus garden at sunset')).toHaveClass('object-cover')
+    expect(screen.getByRole('dialog', { name: 'Welcome back' })).toHaveClass('bg-white/[.12]')
   })
 
-  it('opens, switches, and closes the authentication panel', () => {
-    render(<AuthForm />)
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-    expect(screen.getByRole('dialog', { name: 'Welcome back' })).toBeInTheDocument()
+  it('switches between centered sign-in and sign-up panels', () => {
+    render(<AuthForm initialMode="sign-in" />)
     fireEvent.click(screen.getByRole('button', { name: 'Create an account instead' }))
     expect(screen.getByRole('dialog', { name: 'Create an account' })).toBeInTheDocument()
-    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
