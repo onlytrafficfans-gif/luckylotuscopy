@@ -4,5 +4,5 @@ import { getCurrentSession } from '@/lib/auth-session'
 
 export default async function SignInPage() {
   if (await getCurrentSession()) redirect('/')
-  return <AuthForm/>
+  return <AuthForm initialMode="sign-in"/>
 }

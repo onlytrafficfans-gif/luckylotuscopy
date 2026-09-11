@@ -7,11 +7,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Image from 'next/image'
-import { Eye, EyeOff, ShieldCheck, X } from 'lucide-react'
+import { Eye, EyeOff, ShieldCheck } from 'lucide-react'
 
-export function AuthForm() {
+export function AuthForm({ initialMode = 'sign-in' }: { initialMode?: 'sign-in' | 'sign-up' }) {
   const router = useRouter()
-  const [panelMode, setPanelMode] = useState<'sign-in' | 'sign-up' | null>(null)
+  const [panelMode, setPanelMode] = useState<'sign-in' | 'sign-up'>(initialMode)
   const dialogRef = useRef<HTMLElement>(null)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -53,16 +53,11 @@ export function AuthForm() {
 
   return (
     <main className="relative min-h-svh overflow-hidden bg-[#070605] text-white">
-      <Image src="/lucky-lotus-login-bg.png" alt="Lucky Lotus garden at sunset" fill priority sizes="100vw" className="object-contain object-center"/>
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,.25),transparent_30%,transparent_72%,rgba(0,0,0,.28))]" aria-hidden="true"/>
-      <nav aria-label="Account access" className="absolute right-4 top-4 z-20 flex items-center gap-2 sm:right-8 sm:top-7">
-        <button type="button" onClick={() => setPanelMode('sign-in')} aria-pressed={panelMode === 'sign-in'} className="rounded-full border border-white/45 bg-black/25 px-5 py-2.5 text-sm font-semibold text-white shadow-lg backdrop-blur-md transition hover:border-[#f1bd67] hover:bg-black/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f1bd67]">Sign in</button>
-        <button type="button" onClick={() => setPanelMode('sign-up')} aria-pressed={panelMode === 'sign-up'} className="rounded-full border border-[#f3c879] bg-[linear-gradient(135deg,#b96e22,#edb85b)] px-5 py-2.5 text-sm font-bold text-[#1d1005] shadow-lg transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">Sign up</button>
-      </nav>
+      <Image src="/lucky-lotus-login-bg.png" alt="Lucky Lotus garden at sunset" fill priority sizes="100vw" className="object-cover object-center"/>
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,.12),transparent_35%,transparent_70%,rgba(0,0,0,.18))]" aria-hidden="true"/>
 
-      {panelMode && <div className="absolute inset-0 z-10 grid place-items-center overflow-y-auto bg-black/20 px-4 py-20 backdrop-blur-[2px] sm:px-8" onMouseDown={(event) => { if (event.target === event.currentTarget) setPanelMode(null) }}>
-      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="auth-title" tabIndex={-1} onKeyDown={(event) => { if (event.key === 'Escape') setPanelMode(null) }} className="relative w-full max-w-[430px] rounded-[28px] border border-white/30 bg-black/35 p-6 shadow-[0_24px_80px_rgba(0,0,0,.42)] backdrop-blur-xl outline-none sm:p-9">
-        <button type="button" onClick={() => setPanelMode(null)} aria-label="Close account form" className="absolute right-4 top-4 grid size-9 place-items-center rounded-full border border-white/20 bg-black/20 text-white/80 transition hover:bg-black/45 hover:text-white"><X size={17}/></button>
+      <div className="absolute inset-0 z-10 grid place-items-center overflow-y-auto px-4 py-10 sm:px-8">
+      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="auth-title" tabIndex={-1} className="relative w-full max-w-[430px] rounded-[28px] border border-white/45 bg-white/[.12] p-6 shadow-[0_24px_80px_rgba(0,0,0,.28)] backdrop-blur-md outline-none sm:p-9">
         <div className="flex justify-center"><Image src="/lucky-lotus-logo.png" alt="Lucky Lotus" width={260} height={180} className="h-auto w-[210px] object-contain drop-shadow-[0_8px_24px_rgba(235,156,47,.28)]" priority/></div>
         <div className="mt-4 text-center">
           <h1 id="auth-title" className="font-serif text-3xl font-semibold tracking-[.01em] text-[#fff8ea]">
@@ -145,7 +140,7 @@ export function AuthForm() {
         </p>
         <p className="mt-6 flex items-center justify-center gap-2 text-center text-xs text-[#a99883]"><ShieldCheck size={14}/>Your workspace stays private and encrypted.</p>
       </section>
-      </div>}
+      </div>
     </main>
   )
 }
