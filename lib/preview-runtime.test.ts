@@ -12,6 +12,12 @@ function files(entries: Record<string, string>): PreviewFile[] {
 }
 
 describe('safe static preview assembly', () => {
+  it('emits bounded visual element selections through the scoped runtime channel', () => {
+    const output=assembleStaticPreview([{path:'index.html',content:'<!doctype html><html><body><button id="save">Save</button></body></html>'}],'index.html')
+    expect(output.html).toContain("send('selection'")
+    expect(output.html).toContain('data-lotus-selected')
+    expect(output.html).toContain('slice(0,500)')
+  })
   it('inlines local styles, scripts, images and HTML links without retaining network-capable references', () => {
     const output = assembleStaticPreview(files({
       'index.html': '<link rel="stylesheet" href="styles/site.css"><img src="images/mark.svg"><a href="about.html">About</a><script src="scripts/app.js"></script>',
