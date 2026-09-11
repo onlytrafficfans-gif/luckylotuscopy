@@ -16,7 +16,9 @@ describe('GitHub repository publishing', () => {
   })
 
   it('does not expose the token when GitHub rejects the request', async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ message: 'Repository already exists' }), { status: 422 }))
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ message: 'Repository already exists' }), { status: 422 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ message: 'Repository already exists' }), { status: 422 }))
     await expect(publishGitHubRepository('secret-token', { name: 'App', description: '', private: true, files: [{ path: 'index.html', content: '' }] }, fetcher)).rejects.toThrow('Repository already exists')
     await expect(publishGitHubRepository('secret-token', { name: 'App', description: '', private: true, files: [{ path: 'index.html', content: '' }] }, fetcher)).rejects.not.toThrow('secret-token')
   })
