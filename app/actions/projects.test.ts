@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   updateSettings: vi.fn(),
   getRuntime: vi.fn(),
   getSpecification: vi.fn(),
+  updateSpecification: vi.fn(),
   listFiles: vi.fn(),
   getFile: vi.fn(),
   getFileByPath: vi.fn(),
@@ -53,6 +54,7 @@ vi.mock('@/lib/projects', () => ({ createProjectService: vi.fn(() => ({
   updateSettings: mocks.updateSettings,
   getRuntime: mocks.getRuntime,
   getSpecification: mocks.getSpecification,
+  updateSpecification: mocks.updateSpecification,
   listFiles: mocks.listFiles,
   getFile: mocks.getFile,
   getFileByPath: mocks.getFileByPath,
@@ -95,6 +97,7 @@ import {
   trashProjectFileAction,
   updateProjectFileAction,
   updateSettingsAction,
+  saveBackendModelAction,
 } from '@/app/actions/projects'
 
 const specification = {
@@ -455,5 +458,25 @@ describe('preview action validation and assembly', () => {
       'src/main.tsx',
       expect.objectContaining({ ownerKey: 'user-a', signal: expect.any(AbortSignal) }),
     )
+  })
+})
+
+describe('backend model generation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.get.mockResolvedValue({ id: 'project-1', name: 'Backend', status: 'active' })
+    mocks.getSpecification.mockResolvedValue(specification)
+    mocks.createCheckpoint.mockResolvedValue({ id: 'checkpoint-1' })
+    mocks.applyFileBundle.mockResolvedValue([])
+    mocks.updateSpecification.mockImplementation(async (_userId, _projectId, value) => value)
+  })
+
+  it('checkpoints, generates, and persists a validated entity model', async () => {
+    const entities = [{ id: 'booking', name: 'Booking', fields: [{ id: 'email', name: 'Email', type: 'email', required: true }] }]
+    const result = await saveBackendModelAction('project-1', entities)
+    expect(result).toMatchObject({ ok: true, specification: { data: { entities } } })
+    expect(mocks.createCheckpoint).toHaveBeenCalledWith('user-a', 'project-1', 'Before backend model update')
+    expect(mocks.applyFileBundle).toHaveBeenCalledWith('user-a', 'project-1', expect.arrayContaining([expect.objectContaining({ path: 'backend/schema.sql' })]))
+    expect(mocks.updateSpecification).toHaveBeenCalled()
   })
 })
