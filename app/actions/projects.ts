@@ -300,6 +300,22 @@ export async function permanentlyDeleteProjectAction(projectId: string) {
   refreshProjectViews(projectId)
 }
 
+export async function listProjectCheckpointsAction(projectId: string) {
+  return projects.listCheckpoints(await getUserId(), projectId)
+}
+
+export async function createProjectCheckpointAction(projectId: string, label: string) {
+  const checkpoint = await projects.createCheckpoint(await getUserId(), projectId, label)
+  refreshProjectViews(projectId)
+  return checkpoint
+}
+
+export async function restoreProjectCheckpointAction(projectId: string, checkpointId: string) {
+  await projects.restoreCheckpoint(await getUserId(), projectId, checkpointId)
+  refreshProjectViews(projectId)
+  return getWorkspace(projectId)
+}
+
 export async function updateSettingsAction(input: unknown) {
   const updated = await projects.updateSettings(await getUserId(), input)
   refreshProjectViews()

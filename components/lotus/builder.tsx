@@ -7,12 +7,12 @@ import {
   Code2, Zap, ImageIcon, X, ChevronDown,
   Plus, Upload, FileText, Brain, Bot, Cpu,
   Download, Copy, Eye, Check, RotateCcw,
-  Plug, BookOpen, Folder, Grid2X2, KeyRound, Menu, Rocket, Settings,
+  Plug, BookOpen, Folder, Grid2X2, History, KeyRound, Menu, Rocket, Settings,
 } from "lucide-react";
 import { PreviewWorkbench } from "@/components/lotus/preview-workbench";
 import { EditorWorkspace } from "@/components/lotus/editor-workspace";
 import { type EditorFile } from "@/lib/editor-workspace";
-import { buildProjectPreviewAction, runBuildAction, type WorkspaceMessage } from "@/app/actions/projects";
+import { buildProjectPreviewAction, createProjectCheckpointAction, listProjectCheckpointsAction, restoreProjectCheckpointAction, runBuildAction, type WorkspaceMessage } from "@/app/actions/projects";
 import { toast } from "sonner";
 import { redactSensitiveValues } from "@/lib/safety";
 import Image from "next/image";
@@ -32,6 +32,7 @@ interface UploadedFile { id: string; name: string; type: "file" | "image"; mime:
 interface ToggleItem   { id: string; name: string; desc: string; on: boolean; }
 interface Connector    { id: string; name: string; desc: string; connected: boolean; }
 interface Capability   { id: string; name: string; desc: string; category: string; active: boolean; }
+type ProjectCheckpointSummary = Awaited<ReturnType<typeof listProjectCheckpointsAction>>[number];
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 const MODELS = ["Enigma Auto", "GPT-4.1", "Claude Sonnet", "Claude Opus", "Gemini Pro", "DeepSeek Coder"];
@@ -478,6 +479,9 @@ export default function App({ initial }: LotusBuilderProps) {
   const [showFunctions, setShowFunctions] = useState(false);
   const [showViewApp,   setShowViewApp]   = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [checkpoints, setCheckpoints] = useState<ProjectCheckpointSummary[]>([]);
+  const [checkpointBusy, setCheckpointBusy] = useState(false);
 
   // Build state
   const [autosaved,    setAutosaved]    = useState(true);
@@ -586,6 +590,35 @@ export default function App({ initial }: LotusBuilderProps) {
     { label:"Fix Bugs",            text:"Review the current code and fix any bugs." },
     { label:"Improve UI",          text:"Improve the visual design and polish the UI." },
   ];
+
+  async function openHistory() {
+    if (!projectId) return;
+    setCheckpointBusy(true); setShowHistory(true);
+    try { setCheckpoints(await listProjectCheckpointsAction(projectId)); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Version history could not be loaded."); }
+    finally { setCheckpointBusy(false); }
+  }
+
+  async function createCheckpoint() {
+    if (!projectId) return;
+    const label = window.prompt("Checkpoint name", `Checkpoint ${checkpoints.length + 1}`)?.trim();
+    if (!label) return;
+    setCheckpointBusy(true);
+    try { await createProjectCheckpointAction(projectId, label); setCheckpoints(await listProjectCheckpointsAction(projectId)); toast.success("Checkpoint created."); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Checkpoint could not be created."); }
+    finally { setCheckpointBusy(false); }
+  }
+
+  async function restoreCheckpoint(checkpointId:string) {
+    if (!projectId || !window.confirm("Restore this checkpoint? Current project files will be replaced.")) return;
+    setCheckpointBusy(true);
+    try {
+      const workspace = await restoreProjectCheckpointAction(projectId, checkpointId);
+      if (!workspace) throw new Error("Restored workspace could not be loaded.");
+      setBuilderFiles(workspace.files); setEntryPath(workspace.entryPath); setGeneratedHtml(workspace.html); setShowHistory(false); setDragKey(key=>key+1); toast.success("Checkpoint restored.");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Checkpoint could not be restored."); }
+    finally { setCheckpointBusy(false); }
+  }
 
   const toolbarBtns: { icon:React.ReactNode; label:string; onClick:()=>void; active?:boolean }[] = [
     { icon:<Plus size={12}/>,      label:"Plus",      onClick:()=>{ setShowPlus(p=>!p); setShowModel(false); } },
@@ -828,6 +861,7 @@ export default function App({ initial }: LotusBuilderProps) {
 
             {/* Right controls */}
             <div className="flex items-center gap-2">
+              <button type="button" disabled={!projectId} onClick={openHistory} className="flex items-center gap-1 rounded-lg border border-[#eadfd8] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#5f4a3f] disabled:opacity-40"><History size={12}/> History</button>
               {view==="preview" && <>
                 <button onClick={()=>setDragKey(k=>k+1)}
                   className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs transition-all hover:opacity-80"
@@ -890,6 +924,7 @@ export default function App({ initial }: LotusBuilderProps) {
         {showAgents    && <AgentsPanel    agents={agents}          onToggle={toggleAgent}     onClose={()=>setShowAgents(false)}/>}
         {showFunctions && <FunctionsPanel caps={capabilities}     onToggle={toggleCap}       onClose={()=>setShowFunctions(false)}/>}
         {showViewApp   && <ViewAppMenu    onClose={()=>setShowViewApp(false)} html={generatedHtml}/>}
+        {showHistory && <CheckpointPanel checkpoints={checkpoints} busy={checkpointBusy} onCreate={createCheckpoint} onRestore={restoreCheckpoint} onClose={()=>setShowHistory(false)}/>}
       </AnimatePresence>
 
       {/* Click-away to close popovers */}
@@ -898,5 +933,13 @@ export default function App({ initial }: LotusBuilderProps) {
       )}
     </div>
   );
+}
+
+function CheckpointPanel({ checkpoints, busy, onCreate, onRestore, onClose }:{ checkpoints:ProjectCheckpointSummary[]; busy:boolean; onCreate:()=>void; onRestore:(id:string)=>void; onClose:()=>void }) {
+  return <Modal title="Version history" onClose={onClose}><div className="p-4">
+    <button type="button" disabled={busy} onClick={onCreate} className="w-full rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--accent-foreground)] disabled:opacity-50">Create checkpoint</button>
+    <p className="mt-2 text-xs text-[var(--muted-foreground)]">Stores every project file, runtime setting, and product specification.</p>
+    <div className="mt-4 grid gap-2">{checkpoints.length===0?<p className="rounded-xl border border-dashed p-5 text-center text-sm text-[var(--muted-foreground)]">No checkpoints yet.</p>:checkpoints.map(checkpoint=><div key={checkpoint.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] p-3"><div className="min-w-0"><p className="truncate text-sm font-semibold">{checkpoint.label}</p><p className="mt-1 text-[10px] text-[var(--muted-foreground)]">{checkpoint.fileCount} files · {new Date(checkpoint.createdAt).toLocaleString()}</p></div><button type="button" disabled={busy} onClick={()=>onRestore(checkpoint.id)} className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-semibold disabled:opacity-50">Restore</button></div>)}</div>
+  </div></Modal>
 }
 export type { LotusBuilderProps };

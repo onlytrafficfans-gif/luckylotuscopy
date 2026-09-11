@@ -40,6 +40,13 @@ function normalizedName(name: string) {
   return value
 }
 
+function normalizedCheckpointLabel(label: string) {
+  const value = label.trim().replace(/\s+/g, ' ')
+  if (!value) throw new ProjectLifecycleError('Checkpoint label is required.')
+  if (value.length > 100) throw new ProjectLifecycleError('Checkpoint label must be 100 characters or fewer.')
+  return value
+}
+
 function validatePath(value: unknown) {
   if (typeof value !== 'string' || !value || value.length > 240 || value.includes('\\') || value.startsWith('/') || value.includes('\0')) {
     throw new ProjectLifecycleError('File path must be a safe relative path.')
@@ -311,6 +318,40 @@ export function createProjectService(database: ProjectDatabase) {
       const row = sqlite.prepare(`SELECT f.* FROM project_file f JOIN project p ON p.id = f.projectId
         WHERE f.projectId = ? AND f.path = ? AND p.userId = ?${options.includeTrashed ? '' : ' AND f.deletedAt IS NULL'} LIMIT 1`).get(projectId, safePath, userId) as RawFile | undefined
       return row ? fileFromRow(row) : null
+    },
+    async createCheckpoint(userId: string, projectId: string, label: string) {
+      await owned(userId, projectId)
+      const files = sqlite.prepare('SELECT path, content, encoding FROM project_file WHERE projectId = ? AND deletedAt IS NULL ORDER BY path').all(projectId)
+      const runtime = sqlite.prepare('SELECT runtime, framework, buildTool, entryPath, metadata FROM project_runtime WHERE projectId = ?').get(projectId)
+      const specification = sqlite.prepare('SELECT specification FROM project_specification WHERE projectId = ?').get(projectId) as { specification: string } | undefined
+      if (!runtime || !specification) throw new ProjectLifecycleError('Project workspace is incomplete.')
+      const checkpoint = { id: newId(), projectId, label: normalizedCheckpointLabel(label), files: JSON.stringify(files), runtime: JSON.stringify(runtime), specification: specification.specification, createdAt: Date.now() }
+      sqlite.prepare('INSERT INTO project_checkpoint (id, projectId, label, files, runtime, specification, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)').run(checkpoint.id, checkpoint.projectId, checkpoint.label, checkpoint.files, checkpoint.runtime, checkpoint.specification, checkpoint.createdAt)
+      return { id: checkpoint.id, projectId, label: checkpoint.label, fileCount: files.length, createdAt: new Date(checkpoint.createdAt) }
+    },
+    async listCheckpoints(userId: string, projectId: string) {
+      await owned(userId, projectId)
+      const rows = sqlite.prepare('SELECT id, projectId, label, files, createdAt FROM project_checkpoint WHERE projectId = ? ORDER BY createdAt DESC').all(projectId) as Array<{ id:string; projectId:string; label:string; files:string; createdAt:number }>
+      return rows.map(row => ({ id: row.id, projectId: row.projectId, label: row.label, fileCount: (JSON.parse(row.files) as unknown[]).length, createdAt: new Date(row.createdAt) }))
+    },
+    async restoreCheckpoint(userId: string, projectId: string, checkpointId: string) {
+      return withTransaction(() => {
+        assertWritableProject(userId, projectId)
+        const checkpoint = sqlite.prepare(`SELECT c.* FROM project_checkpoint c JOIN project p ON p.id = c.projectId WHERE c.id = ? AND c.projectId = ? AND p.userId = ?`).get(checkpointId, projectId, userId) as { files:string; runtime:string; specification:string } | undefined
+        if (!checkpoint) throw new ProjectLifecycleError('Checkpoint not found.')
+        const files = JSON.parse(checkpoint.files) as ProjectFileInput[]
+        const runtime = JSON.parse(checkpoint.runtime) as { runtime:string; framework:string; buildTool:string|null; entryPath:string; metadata:string|Record<string,string> }
+        const specification = parseProjectSpecification(JSON.parse(checkpoint.specification))
+        const validatedFiles = files.map(validateFileInput)
+        if (validatedFiles.reduce((total, file) => total + file.bytes, 0) > MAX_PROJECT_BYTES) throw new ProjectLifecycleError('Checkpoint exceeds the project size limit.')
+        const now = Date.now()
+        sqlite.prepare('DELETE FROM project_file WHERE projectId = ?').run(projectId)
+        const insert = sqlite.prepare('INSERT INTO project_file (id, projectId, path, content, encoding, size, originalPath, deletedAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)')
+        for (const file of validatedFiles) insert.run(newId(), projectId, file.path, file.content, file.encoding, file.bytes, now, now)
+        sqlite.prepare('UPDATE project_runtime SET runtime = ?, framework = ?, buildTool = ?, entryPath = ?, metadata = ?, updatedAt = ? WHERE projectId = ?').run(runtime.runtime, runtime.framework, runtime.buildTool, runtime.entryPath, typeof runtime.metadata === 'string' ? runtime.metadata : JSON.stringify(runtime.metadata), now, projectId)
+        sqlite.prepare('UPDATE project_specification SET specification = ?, updatedAt = ? WHERE projectId = ?').run(JSON.stringify(specification), now, projectId)
+        touchProject(projectId, now)
+      })
     },
     async createFile(userId: string, projectId: string, input: ProjectFileInput) {
       const file = validateFileInput(input)

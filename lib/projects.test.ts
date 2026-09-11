@@ -26,7 +26,7 @@ function setup() {
 describe('project lifecycle service', () => {
   it('creates owner-scoped multi-file checkpoints and restores them atomically', async () => {
     const projects = setup()
-    const created = await projects.createBlank('user-a', 'Checkpoint app', 'react-vite')
+    const created = await projects.createBlank('user-a', 'Checkpoint app', 'react')
     const files = await projects.listFiles('user-a', created.id)
     const app = files.find((file) => file.path === 'src/App.jsx')!
     const checkpoint = await projects.createCheckpoint('user-a', created.id, 'Before redesign')

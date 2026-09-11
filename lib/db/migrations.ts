@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3'
 import { createProjectSpecification } from '@/lib/project-specification'
 
-const SCHEMA_VERSION = 6
+const SCHEMA_VERSION = 7
 
 const CREATE_BASE_TABLES_SQL = `
   CREATE TABLE IF NOT EXISTS user (
@@ -74,6 +74,14 @@ const CREATE_MESSAGE_TABLE_SQL = `
   );
 `
 
+const CREATE_PROJECT_CHECKPOINT_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS project_checkpoint (
+    id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    label TEXT NOT NULL, files TEXT NOT NULL, runtime TEXT NOT NULL, specification TEXT NOT NULL,
+    createdAt INTEGER NOT NULL
+  );
+`
+
 const CREATE_INDEXES_SQL = `
   CREATE INDEX IF NOT EXISTS account_user_id_idx ON account(userId);
   CREATE INDEX IF NOT EXISTS session_user_id_idx ON session(userId);
@@ -85,6 +93,7 @@ const CREATE_INDEXES_SQL = `
   CREATE UNIQUE INDEX IF NOT EXISTS project_file_active_path_idx ON project_file(projectId, path) WHERE deletedAt IS NULL;
   CREATE INDEX IF NOT EXISTS message_project_created_at_idx ON message(projectId, createdAt);
   CREATE INDEX IF NOT EXISTS message_user_created_at_idx ON message(userId, createdAt);
+  CREATE INDEX IF NOT EXISTS project_checkpoint_project_created_at_idx ON project_checkpoint(projectId, createdAt DESC);
 `
 
 function tableExists(sqlite: Database.Database, table: string) {
@@ -306,6 +315,7 @@ export function migrateDatabase(sqlite: Database.Database) {
       rebuildProjectFileTable(sqlite)
       rebuildProjectRuntimeTable(sqlite)
       rebuildProjectSpecificationTable(sqlite)
+      sqlite.exec(CREATE_PROJECT_CHECKPOINT_TABLE_SQL)
       backfillProjectSpecifications(sqlite)
       migrateLegacyProjectFiles(sqlite, priorVersion)
       sqlite.exec(CREATE_INDEXES_SQL)

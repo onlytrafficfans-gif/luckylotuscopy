@@ -64,6 +64,12 @@ export const message = sqliteTable('message', {
   index('message_project_created_at_idx').on(table.projectId, table.createdAt),
   index('message_user_created_at_idx').on(table.userId, table.createdAt),
 ])
+export const projectCheckpoint = sqliteTable('project_checkpoint', {
+  id: text('id').primaryKey(), projectId: text('projectId').notNull().references(() => project.id, { onDelete: 'cascade' }),
+  label: text('label').notNull(), files: text('files', { mode: 'json' }).$type<Array<{ path:string; content:string; encoding:'utf-8'|'utf-16le' }>>().notNull(),
+  runtime: text('runtime', { mode: 'json' }).$type<Record<string, unknown>>().notNull(), specification: text('specification', { mode: 'json' }).$type<ProjectSpecification>().notNull(),
+  createdAt: timestamp('createdAt'),
+}, (table) => [index('project_checkpoint_project_created_at_idx').on(table.projectId, table.createdAt)])
 
 export type Project = typeof project.$inferSelect
 export type Message = typeof message.$inferSelect
@@ -72,3 +78,4 @@ export type ProjectFiles = Record<string, string>
 export type ProjectFile = typeof projectFile.$inferSelect
 export type ProjectRuntime = typeof projectRuntime.$inferSelect
 export type StoredProjectSpecification = typeof projectSpecification.$inferSelect
+export type ProjectCheckpoint = typeof projectCheckpoint.$inferSelect

@@ -21,6 +21,13 @@ function normalizedName(name: string) {
   return value
 }
 
+function normalizedCheckpointLabel(label: string) {
+  const value = label.trim().replace(/\s+/g, ' ')
+  if (!value) throw new ProjectLifecycleError('Checkpoint label is required.')
+  if (value.length > 100) throw new ProjectLifecycleError('Checkpoint label must be 100 characters or fewer.')
+  return value
+}
+
 function validatePath(value: unknown) {
   if (typeof value !== 'string' || !value || value.length > 240 || value.includes('\\') || value.startsWith('/') || value.includes('\0')) throw new ProjectLifecycleError('File path must be a safe relative path.')
   const parts = value.split('/')
@@ -180,6 +187,37 @@ export function createPostgresProjectService(pool: Pool) {
     async getFileByPath(userId: string, projectId: string, path: string, options: { includeTrashed?: boolean } = {}) {
       const safePath = validatePath(path)
       return (await row<ProjectFile>(pool, `SELECT f.* FROM project_file f JOIN project p ON p.id = f."projectId" WHERE f."projectId" = $1 AND f.path = $2 AND p."userId" = $3${options.includeTrashed ? '' : ' AND f."deletedAt" IS NULL'} LIMIT 1`, [projectId, safePath, userId])) ?? null
+    },
+    async createCheckpoint(userId: string, projectId: string, label: string) {
+      await owned(pool, userId, projectId)
+      const files = await rows<{ path:string; content:string; encoding:'utf-8'|'utf-16le' }>(pool, 'SELECT path, content, encoding FROM project_file WHERE "projectId" = $1 AND "deletedAt" IS NULL ORDER BY path', [projectId])
+      const runtime = await row<Record<string, unknown>>(pool, 'SELECT runtime, framework, "buildTool", "entryPath", metadata FROM project_runtime WHERE "projectId" = $1', [projectId])
+      const specification = await row<{ specification: unknown }>(pool, 'SELECT specification FROM project_specification WHERE "projectId" = $1', [projectId])
+      if (!runtime || !specification) throw new ProjectLifecycleError('Project workspace is incomplete.')
+      const checkpointId = id()
+      const checkpointLabel = normalizedCheckpointLabel(label)
+      const created = await row<{ createdAt:Date }>(pool, 'INSERT INTO project_checkpoint (id, "projectId", label, files, runtime, specification) VALUES ($1, $2, $3, $4, $5, $6) RETURNING "createdAt"', [checkpointId, projectId, checkpointLabel, files, runtime, specification.specification])
+      return { id: checkpointId, projectId, label: checkpointLabel, fileCount: files.length, createdAt: created?.createdAt ?? new Date() }
+    },
+    async listCheckpoints(userId: string, projectId: string) {
+      await owned(pool, userId, projectId)
+      const checkpoints = await rows<{ id:string; projectId:string; label:string; fileCount:number; createdAt:Date }>(pool, 'SELECT id, "projectId", label, jsonb_array_length(files)::int AS "fileCount", "createdAt" FROM project_checkpoint WHERE "projectId" = $1 ORDER BY "createdAt" DESC', [projectId])
+      return checkpoints
+    },
+    async restoreCheckpoint(userId: string, projectId: string, checkpointId: string) {
+      await postgresTransaction(async client => {
+        await writable(client, userId, projectId)
+        const checkpoint = await row<{ files:ProjectFileInput[]; runtime:{ runtime:string; framework:string; buildTool:string|null; entryPath:string; metadata:Record<string,string> }; specification:unknown }>(client, 'SELECT c.files, c.runtime, c.specification FROM project_checkpoint c JOIN project p ON p.id = c."projectId" WHERE c.id = $1 AND c."projectId" = $2 AND p."userId" = $3 FOR UPDATE', [checkpointId, projectId, userId])
+        if (!checkpoint) throw new ProjectLifecycleError('Checkpoint not found.')
+        const files = checkpoint.files.map(validateFileInput)
+        if (files.reduce((total, file) => total + file.bytes, 0) > MAX_PROJECT_BYTES) throw new ProjectLifecycleError('Checkpoint exceeds the project size limit.')
+        const specification = parseProjectSpecification(checkpoint.specification)
+        await client.query('DELETE FROM project_file WHERE "projectId" = $1', [projectId])
+        for (const file of files) await client.query('INSERT INTO project_file (id, "projectId", path, content, encoding, size) VALUES ($1, $2, $3, $4, $5, $6)', [id(), projectId, file.path, file.content, file.encoding, file.bytes])
+        await client.query('UPDATE project_runtime SET runtime = $1, framework = $2, "buildTool" = $3, "entryPath" = $4, metadata = $5, "updatedAt" = now() WHERE "projectId" = $6', [checkpoint.runtime.runtime, checkpoint.runtime.framework, checkpoint.runtime.buildTool, checkpoint.runtime.entryPath, checkpoint.runtime.metadata, projectId])
+        await client.query('UPDATE project_specification SET specification = $1, "updatedAt" = now() WHERE "projectId" = $2', [specification, projectId])
+        await touch(client, projectId)
+      })
     },
     async createFile(userId: string, projectId: string, input: ProjectFileInput) {
       const file = validateFileInput(input)
