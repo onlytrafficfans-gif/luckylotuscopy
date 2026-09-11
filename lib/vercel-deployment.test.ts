@@ -46,7 +46,9 @@ describe('Vercel deployment client', () => {
   })
 
   it('returns safe provider errors without exposing credentials', async () => {
-    fetcher.mockResolvedValue(new Response(JSON.stringify({ error: { message: 'Invalid request' } }), { status: 400 }))
+    fetcher
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: 'Invalid request' } }), { status: 400 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: 'Invalid request' } }), { status: 400 }))
     const client = createVercelClient('super-secret-token', fetcher)
     await expect(client.createPreview({ name: 'App', framework: 'static', files: [{ path: 'index.html', content: '' }] })).rejects.toThrow('Invalid request')
     await expect(client.createPreview({ name: 'App', framework: 'static', files: [{ path: 'index.html', content: '' }] })).rejects.not.toThrow('super-secret-token')
