@@ -46,6 +46,20 @@ describe('project lifecycle service', () => {
     await expect(projects.restoreCheckpoint('user-b', created.id, checkpoint.id)).rejects.toThrow('Project not found')
   })
 
+  it('applies a validated generated file bundle atomically without exposing another owner', async () => {
+    const projects = setup()
+    const created = await projects.createBlank('user-a', 'Generated bundle', 'react')
+    const updated = await projects.applyFileBundle('user-a', created.id, [
+      { path: 'src/App.jsx', content: 'export default function App(){return <main>Real app</main>}' },
+      { path: 'src/components/Hero.jsx', content: 'export function Hero(){return <h1>Hero</h1>}' },
+      { path: 'src/styles.css', content: 'main { min-height: 100vh; }' },
+    ])
+    expect(updated.map(file=>file.path)).toEqual(['src/App.jsx','src/components/Hero.jsx','src/styles.css'])
+    await expect(projects.applyFileBundle('user-b', created.id, [{ path:'src/App.jsx', content:'stolen' }])).rejects.toThrow('Project not found')
+    await expect(projects.applyFileBundle('user-a', created.id, [{ path:'../escape.ts', content:'bad' }])).rejects.toThrow('safe relative path')
+    expect((await projects.getFileByPath('user-a', created.id, 'src/App.jsx'))?.content).toContain('Real app')
+  })
+
   it('persists an owner-scoped website or app specification and copies it on duplicate', async () => {
     const projects = setup()
     const created = await projects.createBlank('user-a', 'Dispatch')
