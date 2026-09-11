@@ -24,6 +24,28 @@ function setup() {
 }
 
 describe('project lifecycle service', () => {
+  it('creates owner-scoped multi-file checkpoints and restores them atomically', async () => {
+    const projects = setup()
+    const created = await projects.createBlank('user-a', 'Checkpoint app', 'react-vite')
+    const files = await projects.listFiles('user-a', created.id)
+    const app = files.find((file) => file.path === 'src/App.jsx')!
+    const checkpoint = await projects.createCheckpoint('user-a', created.id, 'Before redesign')
+
+    await projects.updateFile('user-a', created.id, app.id, { content: 'export default function App(){return <main>Changed</main>}' })
+    await projects.createFile('user-a', created.id, { path: 'src/temporary.ts', content: 'export const temporary = true' })
+
+    expect(await projects.listCheckpoints('user-a', created.id)).toEqual([
+      expect.objectContaining({ id: checkpoint.id, label: 'Before redesign', fileCount: files.length }),
+    ])
+    await expect(projects.listCheckpoints('user-b', created.id)).rejects.toThrow('Project not found')
+
+    await projects.restoreCheckpoint('user-a', created.id, checkpoint.id)
+    const restored = await projects.listFiles('user-a', created.id)
+    expect(restored.map((file) => file.path)).toEqual(files.map((file) => file.path))
+    expect(restored.find((file) => file.path === 'src/App.jsx')?.content).toBe(app.content)
+    await expect(projects.restoreCheckpoint('user-b', created.id, checkpoint.id)).rejects.toThrow('Project not found')
+  })
+
   it('persists an owner-scoped website or app specification and copies it on duplicate', async () => {
     const projects = setup()
     const created = await projects.createBlank('user-a', 'Dispatch')
