@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react'
 import { Apple, ExternalLink, PackageCheck, Play } from 'lucide-react'
-import { getMobileDeploymentConfigAction, saveMobileDeploymentConfigAction } from '@/app/actions/projects'
+import { exportNativePackageAction, getMobileDeploymentConfigAction, saveMobileDeploymentConfigAction } from '@/app/actions/projects'
 import { IntegrationSettings } from '@/components/lotus/integration-settings'
 import { emptyMobileDeploymentConfig, type MobileDeploymentConfig } from '@/lib/mobile-deployment-schema'
 
@@ -35,6 +35,26 @@ export function MobileDeploymentSettings({ projectId }: { projectId: string }) {
     })
   }
 
+  function downloadNativePackage() {
+    setMessage(null)
+    startTransition(async () => {
+      try {
+        const [{ files, name }, { strToU8, zipSync }] = await Promise.all([exportNativePackageAction(projectId), import('fflate')])
+        const archive = zipSync(Object.fromEntries(files.map(file => [file.path, strToU8(file.content)])), { level: 6 })
+        const blob = new Blob([archive.buffer as ArrayBuffer], { type: 'application/zip' })
+        const url = URL.createObjectURL(blob)
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'lucky-lotus-app'}-native.zip`
+        anchor.click()
+        URL.revokeObjectURL(url)
+        setMessage('EAS-ready iOS and Android source package downloaded.')
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : 'The native package could not be created.')
+      }
+    })
+  }
+
   return <div className="mt-7 grid gap-5">
     <section className="rounded-2xl border border-[#eadfd8] bg-white p-5 dark:border-white/10 dark:bg-white/5">
       <h2 className="text-lg font-semibold">Store accounts</h2>
@@ -53,6 +73,6 @@ export function MobileDeploymentSettings({ projectId }: { projectId: string }) {
       <button type="button" disabled={pending || loading} onClick={save} className="mt-5 rounded-xl bg-[#e98b66] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{pending ? 'Saving…' : 'Save mobile configuration'}</button>
     </section>
 
-    <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-100"><div className="flex items-start gap-3"><PackageCheck className="mt-0.5 shrink-0" size={20}/><div><h2 className="font-semibold">Native release artifact required</h2><p className="mt-1 text-sm leading-6">Lucky Lotus currently generates web and React projects. Apple publishing requires a signed <code>.ipa</code>; Google Play requires a signed <code>.aab</code>. Store upload remains locked until Lucky Lotus adds a native packaging/build pipeline, so this route will not pretend a website was submitted as a mobile app.</p></div></div></section>
+    <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-100"><div className="flex items-start gap-3"><PackageCheck className="mt-0.5 shrink-0" size={20}/><div className="flex-1"><h2 className="font-semibold">Native package ready</h2><p className="mt-1 text-sm leading-6">Expo projects export as an Expo SDK 57 package with EAS development, preview, and production profiles. EAS creates the signed <code>.ipa</code> and <code>.aab</code>; Apple and Google credentials are still required before their stores accept a build.</p><button type="button" disabled={pending} onClick={downloadNativePackage} className="mt-4 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{pending ? 'Preparing…' : 'Download native source (.zip)'}</button></div></div></section>
   </div>
 }

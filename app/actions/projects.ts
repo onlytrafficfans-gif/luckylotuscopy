@@ -22,6 +22,7 @@ import { getStarterTemplate } from '@/lib/template-catalog'
 import { renderStarterTemplate } from '@/lib/template-html'
 import { requireCurrentUser } from '@/lib/auth-session'
 import { downloadGitHubRepository, listGitHubBranches, listGitHubRepositories, type GitHubBranch, type GitHubRepository } from '@/lib/github-import'
+import { prepareNativePackage } from '@/lib/native-package'
 
 async function getUserId() {
   return (await requireCurrentUser()).id
@@ -225,6 +226,19 @@ export async function saveMobileDeploymentConfigAction(input: unknown): Promise<
     const validation = issue.match(/"message":\s*"([^"]+)"/)?.[1]
     return { ok: false, error: validation ?? 'Check the mobile app identifiers and try again.' }
   }
+}
+
+export async function exportNativePackageAction(projectId: string) {
+  const userId = await getUserId()
+  const project = await projects.get(userId, projectId)
+  if (!project || project.status !== 'active') throw new Error('Project not found.')
+  const runtime = await projects.getRuntime(userId, projectId)
+  if (runtime?.framework !== 'expo') throw new Error('Choose the Expo framework to export an iOS and Android package.')
+  const [files, config] = await Promise.all([
+    projects.listFiles(userId, projectId),
+    usePostgres ? getMobileDeploymentConfig(userId, projectId) : Promise.resolve({ projectId, appleBundleId: '', appleAppId: '', googlePackageName: '', googleTrack: 'internal' as const }),
+  ])
+  return { name: project.name, files: prepareNativePackage(files.map(file => ({ path: file.path, content: file.content })), config) }
 }
 
 export async function createBlankProjectAction(input?: unknown) {

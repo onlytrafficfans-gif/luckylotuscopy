@@ -30,6 +30,33 @@ const reactFiles: StarterFile[] = [
   { path: 'src/styles.css', content: ':root { font-family: Inter, system-ui, sans-serif; }\n* { box-sizing: border-box; }\nbody { margin: 0; }\n.app { min-height: 100vh; display: grid; place-items: center; padding: 2rem; }\n' },
 ]
 
+const expoFiles: StarterFile[] = [
+  ...reactFiles,
+  { path: 'package.json', content: JSON.stringify({
+    name: 'lucky-lotus-app', version: '1.0.0', private: true, main: 'index.js',
+    scripts: { start: 'expo start', android: 'expo start --android', ios: 'expo start --ios', doctor: 'expo-doctor', build: 'eas build --platform all --profile production' },
+    dependencies: { expo: '^57.0.17', react: '19.2.0', 'react-native': '0.86.3' },
+    devDependencies: { '@babel/core': '^7.28.0', 'expo-doctor': '^1.19.2' },
+  }, null, 2) + '\n' },
+  { path: 'app.json', content: JSON.stringify({ expo: {
+    name: 'Lucky Lotus App', slug: 'lucky-lotus-app', version: '1.0.0', orientation: 'portrait', userInterfaceStyle: 'automatic',
+    ios: { supportsTablet: true, bundleIdentifier: 'com.luckylotus.app' },
+    android: { package: 'com.luckylotus.app' },
+  } }, null, 2) + '\n' },
+  { path: 'eas.json', content: JSON.stringify({
+    cli: { version: '>= 16.0.0' },
+    build: {
+      development: { developmentClient: true, distribution: 'internal' },
+      preview: { distribution: 'internal', android: { buildType: 'apk' } },
+      production: { android: { buildType: 'app-bundle' } },
+    },
+    submit: { production: {} },
+  }, null, 2) + '\n' },
+  { path: 'index.js', content: "import { registerRootComponent } from 'expo'\nimport App from './native/App'\n\nregisterRootComponent(App)\n" },
+  { path: 'native/App.jsx', content: "import { SafeAreaView, StyleSheet, Text, View } from 'react-native'\n\nexport default function App() {\n  return <SafeAreaView style={styles.safeArea}><View style={styles.container}><Text style={styles.title}>Start building</Text><Text style={styles.copy}>Your Lucky Lotus native app is EAS-ready.</Text></View></SafeAreaView>\n}\n\nconst styles = StyleSheet.create({ safeArea: { flex: 1, backgroundColor: '#fff8f3' }, container: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }, title: { color: '#332721', fontSize: 30, fontWeight: '700' }, copy: { color: '#806b60', fontSize: 16, marginTop: 10, textAlign: 'center' } })\n" },
+  { path: 'README.md', content: '# Lucky Lotus native app\n\nInstall dependencies with `npm install`, verify with `npx expo-doctor@latest`, then run `npx eas-cli@latest build --platform all --profile production`. Apple and Google signing credentials are required by EAS before store builds can complete.\n' },
+]
+
 export function frameworkProjectSetup(framework: ProjectFramework) {
   const isComponentProject = framework !== 'static'
   return {
@@ -38,7 +65,7 @@ export function frameworkProjectSetup(framework: ProjectFramework) {
     buildTool: framework === 'static' ? null : framework === 'nextjs' ? 'next' : framework === 'expo' ? 'expo' : 'vite',
     entryPath: 'index.html',
     metadata: isComponentProject ? { generationEntry: 'src/App.jsx', previewAdapter: 'react' } : {},
-    files: isComponentProject ? reactFiles : staticFiles,
+    files: framework === 'expo' ? expoFiles : isComponentProject ? reactFiles : staticFiles,
     targets: framework === 'expo' ? ['ios', 'android'] as const : framework === 'nextjs' ? ['web', 'api'] as const : ['web'] as const,
   }
 }
