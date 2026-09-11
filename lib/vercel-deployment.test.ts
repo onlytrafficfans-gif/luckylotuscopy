@@ -14,6 +14,14 @@ describe('Vercel deployment source', () => {
     expect(source.projectSettings).toMatchObject({ framework: null, outputDirectory: '.' })
   })
 
+  it('deploys Next.js projects with a genuine Next.js build contract', () => {
+    const source = prepareVercelSource('Portal', 'nextjs', [{ path: 'index.html', content: '<div id="root"></div>' }, { path: 'src/App.jsx', content: 'export default function App(){}' }])
+    const manifest = JSON.parse(source.files.find(file => file.path === 'package.json')!.content)
+    expect(manifest).toMatchObject({ scripts: { build: 'next build' }, dependencies: { next: expect.any(String) } })
+    expect(source.files.map(file => file.path)).toEqual(expect.arrayContaining(['app/page.jsx', 'app/layout.jsx']))
+    expect(source.projectSettings).toMatchObject({ framework: 'nextjs', buildCommand: 'npm run build' })
+  })
+
   it('rejects native projects from web deployment', () => {
     expect(() => prepareVercelSource('Native', 'expo', [{ path: 'App.jsx', content: '' }])).toThrow(/Expo/)
   })
