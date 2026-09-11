@@ -874,7 +874,7 @@ export default function App({ initial }: LotusBuilderProps) {
 
 
           {/* View content */}
-          {view==="preview" && (generatedHtml || previewDiagnostics.length > 0) && <div className="min-h-0 flex-1 overflow-hidden rounded-[20px] border border-[#eadfd8] bg-white shadow-[0_12px_40px_rgba(93,56,34,0.07)]"><PreviewWorkbench key={dragKey} html={generatedHtml ?? ""} diagnostics={previewDiagnostics} initialDevice={initial.defaultDevice}/></div>}
+          {view==="preview" && (generatedHtml || previewDiagnostics.length > 0) && <div className="min-h-0 flex-1 overflow-hidden rounded-[20px] border border-[#eadfd8] bg-white shadow-[0_12px_40px_rgba(93,56,34,0.07)]"><PreviewWorkbench key={dragKey} html={generatedHtml ?? ""} diagnostics={previewDiagnostics} initialDevice={initial.defaultDevice} onVisualEdit={(selection,instruction)=>handleSend(`Update the selected ${selection.tag} (${selection.selector}) whose current text is ${JSON.stringify(selection.text)}. ${instruction}`)}/></div>}
           {view==="preview" && !generatedHtml && previewDiagnostics.length === 0 && <div className="min-h-0 flex-1 overflow-hidden rounded-[20px] border border-[#eadfd8] bg-white"><EmptyPreview/></div>}
 
           {projectId

@@ -183,6 +183,7 @@ rememberSensitive(document);
 if(typeof MutationObserver!=='undefined'){var observer=new MutationObserver(function(records){records.forEach(function(record){if(record.type==='attributes')neutralize(record.target);else Array.prototype.slice.call(record.addedNodes).forEach(neutralize)})});observer.observe(document,{subtree:true,childList:true,attributes:true})}
 nativeDefineProperty(window,${JSON.stringify(registryName)},{value:function(){if(registered)return;registered=true;neutralize(document);rememberSensitive(document);document.querySelectorAll('a[data-lotus-local-page]').forEach(function(anchor){var href=anchor.getAttribute('href');if(href)localPages.set(anchor,href)})},writable:false,configurable:false});
 window.addEventListener('click',function(event){var target=event.target&&event.target.closest&&event.target.closest('a[href]');if(!target)return;var localHref=localPages.get(target),href=target.getAttribute('href')||'';if(localHref){event.preventDefault();event.stopImmediatePropagation();event.stopPropagation();if(!event.isTrusted||href!==localHref)return;send('navigation',{local:true});location.href=localHref;return}if(href.charAt(0)!=='#'){event.preventDefault();event.stopImmediatePropagation();event.stopPropagation()}},true);
+var selected=null;window.addEventListener('click',function(event){if(!event.isTrusted)return;var target=event.target&&event.target.closest&&event.target.closest('body *');if(!target||String(target.nodeName).toLowerCase()==='script')return;if(selected)nativeRemoveAttribute.call(selected,'data-lotus-selected');selected=target;nativeSetAttribute.call(target,'data-lotus-selected','true');var tag=String(target.nodeName).toLowerCase(),identifier=target.id?'#'+String(target.id).replace(/[^a-z0-9_-]/gi,''):'';var classes=Array.prototype.slice.call(target.classList||[],0,3).map(function(name){return '.'+String(name).replace(/[^a-z0-9_-]/gi,'')}).join('');var style=getComputedStyle(target),rect=target.getBoundingClientRect();send('selection',{selector:(tag+identifier+classes).slice(0,500),tag:tag.slice(0,40),text:String(target.textContent||'').trim().slice(0,500),styles:{color:style.color,backgroundColor:style.backgroundColor,fontSize:style.fontSize,fontWeight:style.fontWeight,padding:style.padding,margin:style.margin,borderRadius:style.borderRadius},rect:{x:Math.round(rect.x),y:Math.round(rect.y),width:Math.round(rect.width),height:Math.round(rect.height)}})},true);
 ['log','info','warn','error'].forEach(function(level){var original=console[level];console[level]=function(){var args=Array.prototype.slice.call(arguments,0,10).map(clean);send('console',{level:level,args:args});return original.apply(console,arguments)}});
 window.onerror=function(message,source,line,column){send('error',{message:clean(message),source:clean(source||''),line:Number(line)||0,column:Number(column)||0});return false};
 window.addEventListener('unhandledrejection',function(event){send('error',{message:clean(event.reason&&event.reason.message||event.reason||'Unhandled promise rejection'),source:'promise',line:0,column:0})});
@@ -209,10 +210,12 @@ function secureDocumentStructure(source: string, registryName: string, scriptNon
   head.childNodes ??= []
   head.childNodes = head.childNodes.filter((node) => !(node.tagName === 'meta' && attr(node, 'http-equiv')?.toLowerCase() === 'content-security-policy') && node.tagName !== 'base')
   const policy = fragmentNode(`<meta http-equiv="Content-Security-Policy" content="${previewCsp(scriptNonce)}">`)
+  const selectionStyle = fragmentNode('<style data-lotus-runtime>[data-lotus-selected]{outline:2px solid #f28f67!important;outline-offset:2px!important;cursor:crosshair!important}</style>')
   const bridge = fragmentNode(runtimeBridge(registryName, scriptNonce))
   policy.parentNode = head
   bridge.parentNode = head
-  head.childNodes.unshift(policy, bridge)
+  selectionStyle.parentNode = head
+  head.childNodes.unshift(policy, selectionStyle, bridge)
   return document
 }
 

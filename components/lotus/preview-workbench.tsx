@@ -9,7 +9,9 @@ interface PreviewWorkbenchProps {
   html: string
   diagnostics?: PreviewDiagnostic[]
   initialDevice?: PreviewDevice
+  onVisualEdit?: (selection: PreviewSelection, instruction: string) => void | Promise<void>
 }
+export interface PreviewSelection { selector:string; tag:string; text:string; styles:Record<string,string>; rect:{x:number;y:number;width:number;height:number} }
 
 interface ConsoleEntry {
   id: number
@@ -39,7 +41,7 @@ const DESKTOP_PRESETS = [
   { label: '2XL', width: 1440, height: 900 },
 ]
 
-export function PreviewWorkbench({ html, diagnostics = [], initialDevice = 'phone' }: PreviewWorkbenchProps) {
+export function PreviewWorkbench({ html, diagnostics = [], initialDevice = 'phone', onVisualEdit }: PreviewWorkbenchProps) {
   const [device, setDevice] = useState<PreviewDevice>(initialDevice)
   const [orientation, setOrientation] = useState<PreviewOrientation>(initialDevice === 'desktop' ? 'landscape' : 'portrait')
   const [zoom, setZoom] = useState(75)
@@ -52,6 +54,8 @@ export function PreviewWorkbench({ html, diagnostics = [], initialDevice = 'phon
   const [revision, setRevision] = useState(0)
   const [consoleEntries, setConsoleEntries] = useState<ConsoleEntry[]>([])
   const [consoleOpen, setConsoleOpen] = useState(false)
+  const [selection,setSelection]=useState<PreviewSelection|null>(null)
+  const [visualInstruction,setVisualInstruction]=useState('')
   const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null)
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 })
   const frameRef = useRef<HTMLIFrameElement>(null)
@@ -82,6 +86,11 @@ export function PreviewWorkbench({ html, diagnostics = [], initialDevice = 'phon
         if (!['log', 'info', 'warn', 'error'].includes(payload?.level ?? '') || !Array.isArray(payload?.args) || payload.args.length > 10 || payload.args.some((item) => typeof item !== 'string' || item.length > 1_000)) return
         const text = payload.args.join(' ')
         setConsoleEntries((entries) => [...entries.slice(-199), { id: nextConsoleId.current++, level: payload.level ?? 'log', text }])
+      }
+      if(event.data.kind==='selection'){
+        const payload=event.data.payload as PreviewSelection
+        if(!payload||typeof payload.selector!=='string'||payload.selector.length>500||typeof payload.tag!=='string'||typeof payload.text!=='string'||payload.text.length>500||!payload.styles||typeof payload.styles!=='object'||!payload.rect||!Object.values(payload.rect).every(Number.isFinite))return
+        setSelection(payload)
       }
       if (event.data.kind === 'error') {
         const payload = event.data.payload as RuntimeError
@@ -287,6 +296,7 @@ export function PreviewWorkbench({ html, diagnostics = [], initialDevice = 'phon
         {consoleEntries.length === 0 ? <p className="px-1 py-2 text-[#998c84]">No runtime messages.</p> : consoleEntries.map((entry) => <p key={entry.id} className={`border-b border-white/5 px-1 py-1.5 ${entry.level === 'error' ? 'text-red-300' : entry.level === 'warn' ? 'text-amber-300' : 'text-[#ddd3cc]'}`}><span className="mr-2 uppercase text-[9px] opacity-60">{entry.level}</span>{entry.text}</p>)}
       </div>
     </section>}
+    {selection&&<section aria-label="Visual inspector" className="border-t border-[#eadfd8] bg-white p-3 text-xs text-[#332721]"><div className="flex items-center gap-2"><div className="min-w-0 flex-1"><p className="truncate font-mono text-[10px] text-[#b87850]">{selection.selector}</p><p className="truncate text-[#806b60]">{selection.text||`Selected ${selection.tag}`}</p></div>{onVisualEdit&&<><input aria-label="Visual edit instruction" value={visualInstruction} onChange={event=>setVisualInstruction(event.target.value)} placeholder="Change text, color, spacing…" className="h-9 min-w-0 flex-[2] rounded-lg border border-[#eadfd8] px-3"/><button type="button" disabled={!visualInstruction.trim()} onClick={()=>{void onVisualEdit(selection,visualInstruction.trim());setVisualInstruction('')}} className="h-9 rounded-lg bg-[#e98b66] px-3 font-semibold text-white disabled:opacity-40">Apply with AI</button></>}</div></section>}
 
   </section>
 }
