@@ -191,7 +191,7 @@ describe('runtime entry build persistence', () => {
     mocks.applyFileBundle.mockResolvedValue([{...component,content:'export default function App(){return <Dashboard/>}',updatedAt:new Date(400)}])
     const result=await runBuild({projectId:'project-1',prompt:'Add dashboard',model:'default',currentHtml:'old'})
     expect(mocks.createCheckpoint).toHaveBeenCalledWith('user-a','project-1','Before: Add dashboard')
-    expect(mocks.applyFileBundle).toHaveBeenCalledWith('user-a','project-1',expect.arrayContaining([expect.objectContaining({path:'src/Dashboard.jsx'})]))
+    expect(mocks.applyFileBundle).toHaveBeenCalledWith('user-a','project-1',expect.arrayContaining([expect.objectContaining({path:'src/Dashboard.jsx'})]),{path:'src/App.jsx',updatedAt:component.updatedAt})
     expect(result.reply).toContain('Built dashboard')
   })
 })

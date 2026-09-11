@@ -23,6 +23,7 @@ import { renderStarterTemplate } from '@/lib/template-html'
 import { requireCurrentUser } from '@/lib/auth-session'
 import { downloadGitHubRepository, listGitHubBranches, listGitHubRepositories, type GitHubBranch, type GitHubRepository } from '@/lib/github-import'
 import { prepareNativePackage } from '@/lib/native-package'
+import { parseGeneratedBundle, type GeneratedBundle } from '@/lib/generated-bundle'
 
 async function getUserId() {
   return (await requireCurrentUser()).id
@@ -512,6 +513,8 @@ export async function runBuild(input: RunBuildInput): Promise<RunBuildResult> {
   const specification = await projects.getSpecification(userId, projectId)
   const safeSpecification = redactSensitiveValues(JSON.stringify(specification))
   const specificationBlock = `\n\nLucky Lotus project specification (treat this as the product contract; render the current web preview from it):\n${safeSpecification}`
+  const repositoryFiles = ((await projects.listFiles(userId, projectId)) ?? []).slice(0,100).map(file=>({path:file.path,content:redactSensitiveValues(file.content)}))
+  const repositoryBlock = `\n\nCurrent repository files:\n${JSON.stringify(repositoryFiles)}`
 
   // Persist the user's message immediately.
   await appendProjectMessage({
@@ -524,14 +527,14 @@ export async function runBuild(input: RunBuildInput): Promise<RunBuildResult> {
 
   // Build the prompt for the model, giving it the current app as context.
   const componentMode = runtime.runtime === 'react'
-  const frameworkInstruction = componentMode
-    ? `Return only the complete React JSX module for ${generationEntry}. Use React and browser APIs only; do not import framework-specific server modules. The project framework is ${runtime.framework}, rendered through Lucky Lotus's React preview adapter.`
-    : 'Return only a complete self-contained HTML document.'
+  const frameworkInstruction = `Return a JSON repository bundle with this exact shape: {"summary":"short description","files":[{"path":"relative/path","content":"complete file contents"}]}. Include ${generationEntry}. Return every file you create or change, with no markdown or commentary. The project framework is ${runtime.framework}. ${componentMode?'Use React and browser APIs supported by the existing preview adapter.':'Keep index.html runnable with the repository CSS and JavaScript files.'}`
   const userContent = safeCurrentHtml
-    ? `Here is the current ${componentMode ? 'React component' : 'HTML document'}:\n\n${safeCurrentHtml}\n\n---\n\nApply this change. ${frameworkInstruction}\n${safePrompt}${safeContextBlock}${specificationBlock}`
-    : `Build this app. ${frameworkInstruction}\n${safePrompt}${safeContextBlock}${specificationBlock}`
+    ? `Here is the current ${componentMode ? 'React component' : 'HTML document'}:\n\n${safeCurrentHtml}\n\n---\n\nApply this change. ${frameworkInstruction}\n${safePrompt}${safeContextBlock}${specificationBlock}${repositoryBlock}`
+    : `Build this app. ${frameworkInstruction}\n${safePrompt}${safeContextBlock}${specificationBlock}${repositoryBlock}`
 
   let html = entry.content
+  let generatedBundle: GeneratedBundle | null = null
+  if (existingProject) await projects.createCheckpoint(userId,projectId,`Before: ${safePrompt.slice(0,92)}`)
   try {
     const providerConfig = decryptAiProviderConfig((await cookies()).get(AI_PROVIDER_COOKIE)?.value, userId)
     const { text } = await generateText({
@@ -540,7 +543,11 @@ export async function runBuild(input: RunBuildInput): Promise<RunBuildResult> {
       prompt: userContent,
       maxOutputTokens: 8000,
     })
-    html = redactSensitiveValues(stripFences(text))
+    const generated = redactSensitiveValues(text)
+    if (/^\s*(?:```json\s*)?\{/i.test(generated)) {
+      generatedBundle = parseGeneratedBundle(generated,generationEntry)
+      html = generatedBundle.files.find(file=>file.path===generationEntry)!.content
+    } else html = stripFences(generated)
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err)
     // Surface common provider setup failures clearly instead of a generic error.
@@ -553,12 +560,14 @@ export async function runBuild(input: RunBuildInput): Promise<RunBuildResult> {
     throw new Error('Generation failed. Check your server-side AI provider configuration and try again.')
   }
 
-  const reply = input.currentHtml
+  const reply = generatedBundle?.summary ?? (input.currentHtml
     ? 'Done — I applied your change and refreshed the live preview.'
-    : 'Here is your app. It is rendering live in the preview — describe any change to refine it.'
+    : 'Here is your app. It is rendering live in the preview — describe any change to refine it.')
 
   // Persist the generated app + assistant reply.
-  const updatedEntry = await projects.updateFile(userId, projectId, entry.id, { content: html, expectedUpdatedAt })
+  const updatedEntry = generatedBundle
+    ? (await projects.applyFileBundle(userId,projectId,generatedBundle.files,{path:generationEntry,updatedAt:expectedUpdatedAt})).find(file=>file.path===generationEntry)!
+    : await projects.updateFile(userId, projectId, entry.id, { content: html, expectedUpdatedAt })
 
   await appendProjectMessage({
     id: id(),

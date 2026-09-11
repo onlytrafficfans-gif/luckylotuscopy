@@ -58,6 +58,7 @@ describe('project lifecycle service', () => {
     await expect(projects.applyFileBundle('user-b', created.id, [{ path:'src/App.jsx', content:'stolen' }])).rejects.toThrow('Project not found')
     await expect(projects.applyFileBundle('user-a', created.id, [{ path:'../escape.ts', content:'bad' }])).rejects.toThrow('safe relative path')
     expect((await projects.getFileByPath('user-a', created.id, 'src/App.jsx'))?.content).toContain('Real app')
+    await expect(projects.applyFileBundle('user-a',created.id,[{path:'src/App.jsx',content:'stale'}],{path:'src/App.jsx',updatedAt:new Date(1)})).rejects.toThrow('changed elsewhere')
   })
 
   it('persists an owner-scoped website or app specification and copies it on duplicate', async () => {

@@ -199,11 +199,12 @@ export function createPostgresProjectService(pool: Pool) {
       const created = await row<{ createdAt:Date }>(pool, 'INSERT INTO project_checkpoint (id, "projectId", label, files, runtime, specification) VALUES ($1, $2, $3, $4, $5, $6) RETURNING "createdAt"', [checkpointId, projectId, checkpointLabel, files, runtime, specification.specification])
       return { id: checkpointId, projectId, label: checkpointLabel, fileCount: files.length, createdAt: created?.createdAt ?? new Date() }
     },
-    async applyFileBundle(userId: string, projectId: string, inputs: ProjectFileInput[]) {
+    async applyFileBundle(userId: string, projectId: string, inputs: ProjectFileInput[], expected?:{path:string;updatedAt:Date}) {
       return postgresTransaction(async client => {
         await writable(client,userId,projectId)
         if (!Array.isArray(inputs)||inputs.length===0||inputs.length>100) throw new ProjectLifecycleError('Generated bundle must contain between 1 and 100 files.')
         const files=inputs.map(validateFileInput)
+        if(expected){const current=await row<{updatedAt:Date}>(client,'SELECT "updatedAt" FROM project_file WHERE "projectId"=$1 AND path=$2 AND "deletedAt" IS NULL FOR UPDATE',[projectId,validatePath(expected.path)]);if(!current||current.updatedAt.getTime()!==expected.updatedAt.getTime())throw new ProjectLifecycleError('This file changed elsewhere. Reload or resolve the conflict before saving.')}
         if(new Set(files.map(file=>file.path)).size!==files.length) throw new ProjectLifecycleError('Generated bundle contains duplicate file paths.')
         const replaced=files.map(file=>file.path)
         const current=await row<{total:string}>(client,'SELECT COALESCE(SUM(size),0)::text total FROM project_file WHERE "projectId"=$1 AND "deletedAt" IS NULL AND NOT(path=ANY($2::text[]))',[projectId,replaced])

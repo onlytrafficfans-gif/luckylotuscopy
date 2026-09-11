@@ -329,11 +329,12 @@ export function createProjectService(database: ProjectDatabase) {
       sqlite.prepare('INSERT INTO project_checkpoint (id, projectId, label, files, runtime, specification, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)').run(checkpoint.id, checkpoint.projectId, checkpoint.label, checkpoint.files, checkpoint.runtime, checkpoint.specification, checkpoint.createdAt)
       return { id: checkpoint.id, projectId, label: checkpoint.label, fileCount: files.length, createdAt: new Date(checkpoint.createdAt) }
     },
-    async applyFileBundle(userId: string, projectId: string, inputs: ProjectFileInput[]) {
+    async applyFileBundle(userId: string, projectId: string, inputs: ProjectFileInput[], expected?:{path:string;updatedAt:Date}) {
       return withTransaction(() => {
         assertWritableProject(userId, projectId)
         if (!Array.isArray(inputs) || inputs.length === 0 || inputs.length > 100) throw new ProjectLifecycleError('Generated bundle must contain between 1 and 100 files.')
         const files = inputs.map(validateFileInput)
+        if(expected){const current=sqlite.prepare('SELECT updatedAt FROM project_file WHERE projectId=? AND path=? AND deletedAt IS NULL').get(projectId,validatePath(expected.path)) as {updatedAt:number}|undefined;if(!current||current.updatedAt!==expected.updatedAt.getTime())throw new ProjectLifecycleError('This file changed elsewhere. Reload or resolve the conflict before saving.')}
         if (new Set(files.map(file=>file.path)).size !== files.length) throw new ProjectLifecycleError('Generated bundle contains duplicate file paths.')
         const existingTotal = (sqlite.prepare('SELECT COALESCE(SUM(size),0) total FROM project_file WHERE projectId = ? AND deletedAt IS NULL AND path NOT IN (' + files.map(()=>'?').join(',') + ')').get(projectId,...files.map(file=>file.path)) as { total:number }).total
         if (existingTotal + files.reduce((total,file)=>total+file.bytes,0) > MAX_PROJECT_BYTES) throw new ProjectLifecycleError('Project size limit exceeded.')
