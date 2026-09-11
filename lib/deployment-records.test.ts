@@ -20,7 +20,9 @@ describe('deployment records', () => {
   })
 
   it('lists and updates only records belonging to the current user and project', async () => {
-    query.mockResolvedValue({ rows: [] })
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: 'local-1', userId: 'user-1', projectId: 'project-1', status: 'ready' }] })
     await listDeploymentRecords('user-1', 'project-1')
     await updateDeploymentRecord('user-1', 'project-1', 'local-1', { providerDeploymentId: 'dpl_1', providerProjectId: 'prj_1', name: 'app', status: 'ready', url: 'https://app.vercel.app', error: null })
     expect(query.mock.calls[0][1]).toEqual(['user-1', 'project-1'])
