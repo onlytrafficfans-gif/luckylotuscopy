@@ -47,9 +47,9 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
   }
 
   return (
-    <main className="relative grid min-h-svh place-items-center overflow-hidden bg-[#070605] px-4 py-8 text-white sm:px-8 lg:justify-items-end lg:px-[7vw]">
+    <main className="relative grid min-h-svh place-items-center overflow-hidden bg-[#070605] px-4 py-8 text-white sm:px-8">
       <Image src="/lucky-lotus-login-bg.png" alt="Lucky Lotus garden at sunset" fill priority sizes="100vw" className="object-cover object-[48%_center]"/>
-      <section className="relative z-10 w-full max-w-[430px] rounded-[28px] border border-[#d99a45]/45 bg-[#090806]/[.92] p-6 shadow-[0_32px_100px_rgba(0,0,0,.72)] backdrop-blur-md sm:p-9">
+      <section className="relative z-10 w-full max-w-[430px] rounded-[28px] border border-white/25 bg-white/[.10] p-6 shadow-[0_24px_80px_rgba(0,0,0,.42)] backdrop-blur-xl sm:p-9">
         <div className="flex justify-center"><Image src="/lucky-lotus-logo.png" alt="Lucky Lotus" width={260} height={180} className="h-auto w-[210px] object-contain drop-shadow-[0_8px_24px_rgba(235,156,47,.28)]" priority/></div>
         <div className="mt-4 text-center">
           <h1 className="font-serif text-3xl font-semibold tracking-[.01em] text-[#fff8ea]">
