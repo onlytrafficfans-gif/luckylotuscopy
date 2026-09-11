@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { ExternalLink, RefreshCw, Rocket, ShieldCheck } from 'lucide-react'
 import { createVercelPreviewAction, listWebDeploymentsAction, promoteVercelDeploymentAction, refreshVercelDeploymentAction } from '@/app/actions/projects'
 import { IntegrationSettings } from '@/components/lotus/integration-settings'
@@ -12,13 +12,14 @@ export function WebDeploymentSettings({ projectId }: { projectId: string }) {
   const [loading, setLoading] = useState(true)
   const [pending, startTransition] = useTransition()
 
-  const load = useCallback(async () => {
-    try { setDeployments(await listWebDeploymentsAction(projectId)) }
-    catch (error) { setMessage(error instanceof Error ? error.message : 'Deployment history could not be loaded.') }
-    finally { setLoading(false) }
+  useEffect(() => {
+    let active = true
+    listWebDeploymentsAction(projectId)
+      .then(value => { if (active) setDeployments(value) })
+      .catch(error => { if (active) setMessage(error instanceof Error ? error.message : 'Deployment history could not be loaded.') })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
   }, [projectId])
-
-  useEffect(() => { void load() }, [load])
 
   function createPreview() {
     setMessage(null)
