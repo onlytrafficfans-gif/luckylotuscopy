@@ -11,7 +11,7 @@ export const createProjectInputSchema = z.object({
 export const PROJECT_FRAMEWORKS: Array<{ id: ProjectFramework; label: string; description: string; platforms: string }> = [
   { id: 'static', label: 'Static HTML', description: 'HTML, CSS, and JavaScript with the fastest preview.', platforms: 'Web' },
   { id: 'react', label: 'React', description: 'Component-based web apps with a bundled live preview.', platforms: 'Web' },
-  { id: 'nextjs', label: 'Next.js', description: 'Next.js project identity with a React preview adapter.', platforms: 'Web + API' },
+  { id: 'nextjs', label: 'Next.js', description: 'A real Next.js App Router project with a fast local preview adapter.', platforms: 'Web + API' },
   { id: 'expo', label: 'Expo', description: 'React Native project identity for iOS and Android apps.', platforms: 'iOS + Android' },
 ]
 
@@ -28,6 +28,17 @@ const reactFiles: StarterFile[] = [
   { path: 'src/main.jsx', content: "import React from 'react'\nimport { createRoot } from 'react-dom/client'\nimport App from './App.jsx'\nimport './styles.css'\n\ncreateRoot(document.getElementById('root')).render(<App />)\n" },
   { path: 'src/App.jsx', content: "export default function App() {\n  return <main className=\"app\"><h1>Start building</h1></main>\n}\n" },
   { path: 'src/styles.css', content: ':root { font-family: Inter, system-ui, sans-serif; }\n* { box-sizing: border-box; }\nbody { margin: 0; }\n.app { min-height: 100vh; display: grid; place-items: center; padding: 2rem; }\n' },
+]
+
+const nextFiles: StarterFile[] = [
+  ...reactFiles,
+  { path: 'package.json', content: JSON.stringify({
+    name: 'lucky-lotus-next-app', version: '1.0.0', private: true,
+    scripts: { dev: 'next dev', build: 'next build', start: 'next start' },
+    dependencies: { next: '^16.0.0', react: '^19.0.0', 'react-dom': '^19.0.0' },
+  }, null, 2) + '\n' },
+  { path: 'app/layout.jsx', content: "import '../src/styles.css'\n\nexport const metadata = { title: 'Lucky Lotus app' }\nexport default function RootLayout({ children }) { return <html lang=\"en\"><body>{children}</body></html> }\n" },
+  { path: 'app/page.jsx', content: "'use client'\n\nimport App from '../src/App.jsx'\nexport default function Page() { return <App /> }\n" },
 ]
 
 const expoFiles: StarterFile[] = [
@@ -65,7 +76,7 @@ export function frameworkProjectSetup(framework: ProjectFramework) {
     buildTool: framework === 'static' ? null : framework === 'nextjs' ? 'next' : framework === 'expo' ? 'expo' : 'vite',
     entryPath: 'index.html',
     metadata: isComponentProject ? { generationEntry: 'src/App.jsx', previewAdapter: 'react' } : {},
-    files: framework === 'expo' ? expoFiles : isComponentProject ? reactFiles : staticFiles,
+    files: framework === 'expo' ? expoFiles : framework === 'nextjs' ? nextFiles : isComponentProject ? reactFiles : staticFiles,
     targets: framework === 'expo' ? ['ios', 'android'] as const : framework === 'nextjs' ? ['web', 'api'] as const : ['web'] as const,
   }
 }

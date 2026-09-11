@@ -40,10 +40,25 @@ function packageFile(name: string) {
   }, null, 2) + '\n'
 }
 
+function nextPackageFile(name: string) {
+  return JSON.stringify({
+    name: projectSlug(name), version: '1.0.0', private: true,
+    scripts: { dev: 'next dev', build: 'next build', start: 'next start' },
+    dependencies: { next: '^16.0.0', react: '^19.0.0', 'react-dom': '^19.0.0' },
+  }, null, 2) + '\n'
+}
+
 export function prepareVercelSource(name: string, framework: ProjectFramework, files: DeploymentFile[]) {
   if (framework === 'expo') throw new Error('Expo projects use the native build and store workflow, not Vercel web deployment.')
   if (!files.some(file => file.path === 'index.html')) throw new Error('Web deployment requires an index.html entry file.')
   if (framework === 'static') return { files, projectSettings: { framework: null, outputDirectory: '.' } }
+  if (framework === 'nextjs') {
+    const byPath = new Map(files.map(file => [file.path, file]))
+    if (!byPath.has('package.json')) byPath.set('package.json', { path: 'package.json', content: nextPackageFile(name) })
+    if (!byPath.has('app/layout.jsx')) byPath.set('app/layout.jsx', { path: 'app/layout.jsx', content: "import '../src/styles.css'\n\nexport const metadata = { title: 'Lucky Lotus app' }\nexport default function RootLayout({ children }) { return <html lang=\"en\"><body>{children}</body></html> }\n" })
+    if (!byPath.has('app/page.jsx')) byPath.set('app/page.jsx', { path: 'app/page.jsx', content: "'use client'\n\nimport App from '../src/App.jsx'\nexport default function Page() { return <App /> }\n" })
+    return { files: [...byPath.values()], projectSettings: { framework: 'nextjs', buildCommand: 'npm run build' } }
+  }
   const deployFiles = files.some(file => file.path === 'package.json') ? files : [...files, { path: 'package.json', content: packageFile(name) }]
   return { files: deployFiles, projectSettings: { framework: 'vite', buildCommand: 'npm run build', outputDirectory: 'dist' } }
 }
