@@ -28,6 +28,8 @@ const mocks = vi.hoisted(() => ({
   updateFile: vi.fn(),
   trashFile: vi.fn(),
   restoreFile: vi.fn(),
+  applyFileBundle: vi.fn(),
+  createCheckpoint: vi.fn(),
   cookieGet: vi.fn(),
   cookieSet: vi.fn(),
   cookieDelete: vi.fn(),
@@ -59,6 +61,8 @@ vi.mock('@/lib/projects', () => ({ createProjectService: vi.fn(() => ({
   updateFile: mocks.updateFile,
   trashFile: mocks.trashFile,
   restoreFile: mocks.restoreFile,
+  applyFileBundle: mocks.applyFileBundle,
+  createCheckpoint: mocks.createCheckpoint,
 })) }))
 vi.mock('ai', () => ({ generateText: mocks.generateText }))
 vi.mock('@/lib/local-bundler', () => ({ bundleReactProject: mocks.bundleReactProject }))
@@ -176,6 +180,19 @@ describe('runtime entry build persistence', () => {
     expect(mocks.generateText).toHaveBeenCalledWith(expect.objectContaining({ prompt: expect.stringContaining('project framework is nextjs') }))
     expect(mocks.updateFile).toHaveBeenCalledWith('user-a', 'project-1', 'component-1', expect.objectContaining({ content: 'export default function App(){ return <main>New</main> }' }))
     expect(result.entryPath).toBe('src/App.jsx')
+  })
+
+  it('checkpoints and applies a valid multi-file AI repository bundle', async () => {
+    const component={...entry,id:'component-1',path:'src/App.jsx',content:'old'}
+    mocks.getRuntime.mockResolvedValue({runtime:'react',framework:'react',entryPath:'index.html',metadata:{generationEntry:'src/App.jsx'}})
+    mocks.getFileByPath.mockResolvedValue(component)
+    mocks.generateText.mockResolvedValue({text:JSON.stringify({summary:'Built dashboard',files:[{path:'src/App.jsx',content:'export default function App(){return <Dashboard/>}'},{path:'src/Dashboard.jsx',content:'export function Dashboard(){return <main>Dashboard</main>}'}]})})
+    mocks.createCheckpoint.mockResolvedValue({id:'checkpoint-1'})
+    mocks.applyFileBundle.mockResolvedValue([{...component,content:'export default function App(){return <Dashboard/>}',updatedAt:new Date(400)}])
+    const result=await runBuild({projectId:'project-1',prompt:'Add dashboard',model:'default',currentHtml:'old'})
+    expect(mocks.createCheckpoint).toHaveBeenCalledWith('user-a','project-1','Before: Add dashboard')
+    expect(mocks.applyFileBundle).toHaveBeenCalledWith('user-a','project-1',expect.arrayContaining([expect.objectContaining({path:'src/Dashboard.jsx'})]))
+    expect(result.reply).toContain('Built dashboard')
   })
 })
 
