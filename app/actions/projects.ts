@@ -24,6 +24,9 @@ import { requireCurrentUser } from '@/lib/auth-session'
 import { downloadGitHubRepository, listGitHubBranches, listGitHubRepositories, type GitHubBranch, type GitHubRepository } from '@/lib/github-import'
 import { prepareNativePackage } from '@/lib/native-package'
 import { parseGeneratedBundle, type GeneratedBundle } from '@/lib/generated-bundle'
+import { createVercelClient } from '@/lib/vercel-deployment'
+import { createDeploymentRecord, getDeploymentRecord, listDeploymentRecords, markDeploymentPromoted, updateDeploymentRecord } from '@/lib/deployment-records'
+import { projectFrameworkSchema } from '@/lib/project-framework'
 
 async function getUserId() {
   return (await requireCurrentUser()).id
@@ -240,6 +243,69 @@ export async function exportNativePackageAction(projectId: string) {
     usePostgres ? getMobileDeploymentConfig(userId, projectId) : Promise.resolve({ projectId, appleBundleId: '', appleAppId: '', googlePackageName: '', googleTrack: 'internal' as const }),
   ])
   return { name: project.name, files: prepareNativePackage(files.map(file => ({ path: file.path, content: file.content })), config) }
+}
+
+async function vercelToken(userId: string) {
+  const connection = await getStoredIntegration(userId, 'vercel')
+  if (!connection || connection.provider !== 'vercel') throw new Error('Connect Vercel in Integrations before deploying.')
+  return connection.token
+}
+
+export async function listWebDeploymentsAction(projectId: string) {
+  if (!usePostgres) throw new Error('Persistent deployment storage is not configured.')
+  const userId = await getUserId()
+  const project = await projects.get(userId, projectId)
+  if (!project || project.status !== 'active') throw new Error('Project not found.')
+  return listDeploymentRecords(userId, projectId)
+}
+
+export async function createVercelPreviewAction(projectId: string) {
+  if (!usePostgres) return { ok: false as const, error: 'Persistent deployment storage is not configured.' }
+  try {
+    const userId = await getUserId()
+    const project = await projects.get(userId, projectId)
+    if (!project || project.status !== 'active') throw new Error('Project not found.')
+    const [runtime, files, token] = await Promise.all([projects.getRuntime(userId, projectId), projects.listFiles(userId, projectId), vercelToken(userId)])
+    if (!runtime) throw new Error('Project runtime is unavailable.')
+    const state = await createVercelClient(token).createPreview({
+      name: project.name,
+      framework: projectFrameworkSchema.parse(runtime.framework),
+      files: files.map(file => ({ path: file.path, content: file.content })),
+    })
+    const deployment = await createDeploymentRecord(userId, projectId, state)
+    refreshProjectViews(projectId)
+    return { ok: true as const, deployment }
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : 'Preview deployment could not be created.' }
+  }
+}
+
+export async function refreshVercelDeploymentAction(projectId: string, recordId: string) {
+  if (!usePostgres) return { ok: false as const, error: 'Persistent deployment storage is not configured.' }
+  try {
+    const userId = await getUserId()
+    const record = await getDeploymentRecord(userId, projectId, recordId)
+    if (!record) throw new Error('Deployment record not found.')
+    const state = await createVercelClient(await vercelToken(userId)).getDeployment(record.providerDeploymentId)
+    return { ok: true as const, deployment: await updateDeploymentRecord(userId, projectId, recordId, state) }
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : 'Deployment status could not be refreshed.' }
+  }
+}
+
+export async function promoteVercelDeploymentAction(projectId: string, recordId: string) {
+  if (!usePostgres) return { ok: false as const, error: 'Persistent deployment storage is not configured.' }
+  try {
+    const userId = await getUserId()
+    const record = await getDeploymentRecord(userId, projectId, recordId)
+    if (!record || record.status !== 'ready' || record.target !== 'preview') throw new Error('Only a ready preview deployment can be promoted.')
+    await createVercelClient(await vercelToken(userId)).promote(record)
+    const deployment = await markDeploymentPromoted(userId, projectId, recordId)
+    refreshProjectViews(projectId)
+    return { ok: true as const, deployment }
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : 'Deployment could not be promoted.' }
+  }
 }
 
 export async function createBlankProjectAction(input?: unknown) {

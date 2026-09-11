@@ -22,6 +22,7 @@ import { PreviewWorkbench } from '@/components/lotus/preview-workbench'
 import { useResolvedTheme } from '@/components/lotus/use-resolved-theme'
 import { IntegrationSettings } from '@/components/lotus/integration-settings'
 import { MobileDeploymentSettings } from '@/components/lotus/mobile-deployment-settings'
+import { WebDeploymentSettings } from '@/components/lotus/web-deployment-settings'
 import { PROJECT_FRAMEWORKS, type ProjectFramework } from '@/lib/project-framework'
 import { TEMPLATE_CATALOG } from '@/lib/template-catalog'
 import { AuthSignOut } from '@/components/auth-sign-out'
@@ -200,7 +201,8 @@ function DedicatedPreview({ projects }: { projects: DashboardProject[] }) {
 
 function DeployWorkspace({ projects }: { projects: DashboardProject[] }) {
   const [projectId,setProjectId]=useState(projects[0]?.id??'')
-  return <><WorkspaceHeader title="Deploy" subtitle="Connect store accounts and prepare real mobile releases." actions={<select aria-label="Deployment project" value={projectId} onChange={event=>setProjectId(event.target.value)} className="h-10 rounded-xl border border-[#eadfd8] bg-white px-3 text-sm dark:border-white/10 dark:bg-[#211b18]"><option value="">Select project</option>{projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select>}/>{!projectId?<EmptyState title="Select a project" body="Choose a project to configure Apple and Google Play publishing."/>:<MobileDeploymentSettings key={projectId} projectId={projectId}/>}</>
+  const current=projects.find(project=>project.id===projectId)
+  return <><WorkspaceHeader title="Deploy" subtitle="Create verified web previews or prepare real mobile releases." actions={<select aria-label="Deployment project" value={projectId} onChange={event=>setProjectId(event.target.value)} className="h-10 rounded-xl border border-[#eadfd8] bg-white px-3 text-sm dark:border-white/10 dark:bg-[#211b18]"><option value="">Select project</option>{projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select>}/>{!current?<EmptyState title="Select a project" body="Choose an active project to open its deployment workflow."/>:current.framework==='expo'?<MobileDeploymentSettings key={projectId} projectId={projectId}/>:<WebDeploymentSettings key={projectId} projectId={projectId}/>}</>
 }
 
 function SettingsWorkspace({ projects, settings, setSettings, pending, run, initialTab }: { projects: DashboardProject[]; settings: DashboardSettings; setSettings: (settings: DashboardSettings)=>void; pending:boolean; run:(action:()=>Promise<void>)=>void; initialTab: SettingsTab }) {
