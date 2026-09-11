@@ -10,7 +10,7 @@ import { createProjectService } from '@/lib/projects'
 import { createPostgresProjectService } from '@/lib/postgres-projects'
 import { postgresPool, rows } from '@/lib/db/postgres'
 import { assembleStaticPreview, type PreviewBuild } from '@/lib/preview-runtime'
-import type { ProjectSpecification } from '@/lib/project-specification'
+import { parseProjectSpecification, type ProjectSpecification } from '@/lib/project-specification'
 import { cookies } from 'next/headers'
 import { AI_PROVIDER_COOKIE, aiProviderSchema, aiProviderStatus, decryptAiProviderConfig, defaultAiProviderConfig, encryptAiProviderConfig, generationModel, type AiProviderStatus } from '@/lib/ai-provider'
 import { disconnectIntegration, getStoredIntegration, listIntegrationStatuses, saveIntegrationConnection, type IntegrationConnectionStatus, type IntegrationProvider } from '@/lib/integration-connections'
@@ -27,6 +27,7 @@ import { parseGeneratedBundle, type GeneratedBundle } from '@/lib/generated-bund
 import { createVercelClient } from '@/lib/vercel-deployment'
 import { createDeploymentRecord, getDeploymentRecord, listDeploymentRecords, markDeploymentPromoted, updateDeploymentRecord } from '@/lib/deployment-records'
 import { projectFrameworkSchema } from '@/lib/project-framework'
+import { generateBackendArtifacts } from '@/lib/backend-artifacts'
 
 async function getUserId() {
   return (await requireCurrentUser()).id
@@ -243,6 +244,31 @@ export async function exportNativePackageAction(projectId: string) {
     usePostgres ? getMobileDeploymentConfig(userId, projectId) : Promise.resolve({ projectId, appleBundleId: '', appleAppId: '', googlePackageName: '', googleTrack: 'internal' as const }),
   ])
   return { name: project.name, files: prepareNativePackage(files.map(file => ({ path: file.path, content: file.content })), config) }
+}
+
+export async function getBackendModelAction(projectId: string) {
+  const userId = await getUserId()
+  const project = await projects.get(userId, projectId)
+  if (!project || project.status !== 'active') throw new Error('Project not found.')
+  return projects.getSpecification(userId, projectId)
+}
+
+export async function saveBackendModelAction(projectId: string, entities: unknown) {
+  try {
+    const userId = await getUserId()
+    const project = await projects.get(userId, projectId)
+    if (!project || project.status !== 'active') throw new Error('Project not found.')
+    const current = await projects.getSpecification(userId, projectId)
+    const specification = parseProjectSpecification({ ...current, data: { entities } })
+    const artifacts = generateBackendArtifacts(specification)
+    await projects.createCheckpoint(userId, projectId, 'Before backend model update')
+    await projects.applyFileBundle(userId, projectId, artifacts)
+    await projects.updateSpecification(userId, projectId, specification)
+    refreshProjectViews(projectId)
+    return { ok: true as const, specification, files: artifacts.map(file => file.path) }
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : 'Backend model could not be saved.' }
+  }
 }
 
 async function vercelToken(userId: string) {

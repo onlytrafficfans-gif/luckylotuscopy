@@ -11,8 +11,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
   const dashboard = await getProjectDashboard()
   const params = await searchParams
   const requestedSection = params.section
-  const initialSection = ['projects', 'templates', 'preview', 'deploy', 'settings'].includes(requestedSection ?? '')
-    ? requestedSection as 'projects' | 'templates' | 'preview' | 'deploy' | 'settings'
+  const initialSection = ['projects', 'templates', 'backend', 'preview', 'deploy', 'settings'].includes(requestedSection ?? '')
+    ? requestedSection as 'projects' | 'templates' | 'backend' | 'preview' | 'deploy' | 'settings'
     : 'projects'
 
   return (
