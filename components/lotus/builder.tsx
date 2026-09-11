@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Send, Sparkles,
-  RefreshCw, Code2, Zap, ImageIcon, X, ChevronDown,
+  Code2, Zap, ImageIcon, X, ChevronDown,
   Plus, Upload, FileText, Brain, Bot, Cpu,
   Download, Copy, Eye, Check, RotateCcw,
   Plug, BookOpen, Folder, Grid2X2, KeyRound, Menu, Rocket, Settings,
@@ -25,7 +25,7 @@ const logoLotus = "/lucky-lotus-logo.png";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type DeviceMode = "phone" | "tablet" | "desktop";
-type BuildView  = "preview" | "code" | "deployed";
+type BuildView  = "preview" | "code" | "export";
 
 interface ChatMessage { id: string; role: "user" | "assistant"; content: string; ts: Date; }
 interface UploadedFile { id: string; name: string; type: "file" | "image"; mime: string; }
@@ -205,7 +205,7 @@ export function EmptyPreview() {
   );
 }
 // ─── Deployed panel ───────────────────────────────────────────────────────────
-function DeployedPanel({ html, projectName }:{ html:string|null; projectName:string }) {
+function ExportPanel({ html, projectName }:{ html:string|null; projectName:string }) {
   const ready = !!html;
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8">
@@ -214,11 +214,11 @@ function DeployedPanel({ html, projectName }:{ html:string|null; projectName:str
       </div>
       <div className="text-center">
         <h3 style={{ fontFamily:"Fraunces,serif", fontSize:18, fontWeight:500, color:"var(--foreground)", marginBottom:6 }}>
-          {ready ? `“${projectName}” is ready` : "Ready to deploy"}
+          {ready ? `Export “${projectName}”` : "Nothing to export yet"}
         </h3>
         <p style={{ fontSize:12, color:"var(--muted-foreground)", maxWidth:300, lineHeight:1.6 }}>
           {ready
-            ? "Your app is built and ready to export as an inert HTML file."
+            ? "Download the current preview as a safe standalone HTML snapshot, or copy its source."
             : "Describe an app in chat to generate it — then you can export or copy its HTML."}
         </p>
       </div>
@@ -537,15 +537,9 @@ export default function App({ initial }: LotusBuilderProps) {
       const result = await runBuildAction({
         projectId,
         prompt: text,
-        model: selectedModel,
+        model: "default",
         currentHtml: builderFiles.find(file => file.path === entryPath)?.content ?? generatedHtml,
-        context: {
-          connectors:   connectors.filter(c=>c.connected).map(c=>c.name),
-          skills:       skills.filter(s=>s.on).map(s=>s.name),
-          agents:       agents.filter(a=>a.on).map(a=>a.name),
-          capabilities: capabilities.filter(c=>c.active).map(c=>c.name),
-          attachments:  uploadedFiles.map(f=>f.name),
-        },
+        context: {},
       });
       if (!result.ok) {
         setMessages(p=>[...p,{ id:(Date.now()+1).toString(), role:"assistant", content:result.error, ts:new Date() }]);
@@ -648,8 +642,8 @@ export default function App({ initial }: LotusBuilderProps) {
       {/* ── Body ── */}
       <div className="flex-1 flex overflow-hidden min-h-0">
 
-        {/* ── Chat panel ── */}
-        <aside className="hidden flex-col flex-shrink-0 overflow-hidden" style={{ width:256, borderRight:"1px solid var(--border)", background:"var(--card)" }}>
+          {/* Legacy prompt tools remain unavailable until they are backed by persisted integrations. */}
+        <aside hidden aria-hidden="true">
 
           {/* Tab: Chat only */}
           <div className="flex-shrink-0 flex items-center px-3 pt-3 pb-0" style={{ borderBottom:"1px solid var(--border)" }}>
@@ -816,14 +810,14 @@ export default function App({ initial }: LotusBuilderProps) {
           <input ref={imageInputRef} type="file" className="hidden" accept=".png,.jpg,.jpeg,.webp,.svg" multiple onChange={e=>handleFileUpload(e,"image")}/>
         </aside>
 
-        {/* ── Preview / Code / Deployed ── */}
+        {/* ── Preview / Code / Export ── */}
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#fffdfb] px-2 pb-2 sm:px-5 sm:pb-4 lg:px-8 lg:pb-7">
 
           {/* Preview toolbar */}
           <div className="flex flex-shrink-0 items-center justify-between py-2 sm:py-3">
             {/* View tabs */}
             <div className="flex items-center gap-1 rounded-xl bg-[#fff4ed] p-1">
-              {([["preview","Preview",<Eye key="preview" size={11}/>],["code","Code",<Code2 key="code" size={11}/>],["deployed","Deployed",<Zap key="deployed" size={11}/>]] as const).map(([k,l,icon])=>(
+              {([["preview","Preview",<Eye key="preview" size={11}/>],["code","Code",<Code2 key="code" size={11}/>],["export","Export",<Zap key="export" size={11}/>]] as const).map(([k,l,icon])=>(
                 <button key={k} onClick={()=>setView(k as BuildView)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
                   style={{ background:view===k?"#fff":"transparent", color:view===k?"#2b211b":"#806b60", boxShadow:view===k?"0 1px 5px rgba(79,49,31,0.09)":"none" }}>
@@ -840,7 +834,6 @@ export default function App({ initial }: LotusBuilderProps) {
                   style={{ background:"var(--muted)", color:"var(--muted-foreground)" }}>
                   <RotateCcw size={10}/> Reset
                 </button>
-                <button onClick={()=>setDragKey(k=>k+1)} aria-label="Reset preview position" className="p-1.5 rounded-lg transition-colors hover:opacity-70" style={{ color:"var(--muted-foreground)" }}><RefreshCw size={12}/></button>
               </>}
             </div>
           </div>
@@ -865,7 +858,7 @@ export default function App({ initial }: LotusBuilderProps) {
               />
               </div>
             : view === "code" && <div className="flex flex-1 items-center justify-center text-sm" style={{ color:"var(--muted-foreground)" }}>Create the project before editing files.</div>}
-          {view==="deployed" && <DeployedPanel html={generatedHtml} projectName={projectName}/>}
+          {view==="export" && <ExportPanel html={generatedHtml} projectName={projectName}/>}
 
           {view === "preview" && <div className="mt-2 flex flex-shrink-0 items-center gap-2 rounded-[18px] border border-[#eadfd8] bg-white p-2 shadow-[0_10px_30px_rgba(93,56,34,0.08)] sm:mt-4 sm:gap-3 sm:p-4">
             <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-[#f0e2d9] text-[#f29a70] shadow-sm"><Sparkles size={25}/></span>
@@ -876,18 +869,9 @@ export default function App({ initial }: LotusBuilderProps) {
           {/* Active build context bar */}
           <div className="flex-shrink-0 flex items-center justify-between px-4 py-1.5" style={{ borderTop:"1px solid var(--border)", background:"var(--card)" }}>
             <div className="flex items-center gap-2 flex-wrap">
-              <span style={{ fontFamily:"DM Mono,monospace", fontSize:9, color:"var(--accent)", fontWeight:600 }}>{selectedModel}</span>
-              {[
-                { count:activeConnectors, label:"Connector", plural:"Connectors" },
-                { count:activeSkills,     label:"Skill", plural:"Skills" },
-                { count:activeAgents,     label:"Agent", plural:"Agents" },
-                { count:activeCaps,       label:"Capability", plural:"Capabilities" },
-                { count:uploadedFiles.length, label:"File", plural:"Files" },
-              ].map(item=>(
-                item.count>0 && <span key={item.label} style={{ fontSize:9, color:"var(--muted-foreground)", fontFamily:"DM Mono,monospace" }}>
-                  · {item.count} {item.count === 1 ? item.label : item.plural}
-                </span>
-              ))}
+              <span className="font-mono text-[9px] font-semibold text-[var(--accent)]">{initial.runtime === "react" ? "React workspace" : "Static workspace"}</span>
+              <span className="font-mono text-[9px] text-[var(--muted-foreground)]">· {builderFiles.length} real {builderFiles.length === 1 ? "file" : "files"}</span>
+              <span className="font-mono text-[9px] text-[var(--muted-foreground)]">· {entryPath}</span>
             </div>
             <div className="flex items-center gap-1.5">
               {autosaved

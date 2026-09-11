@@ -60,10 +60,11 @@ describe('PreviewWorkbench', () => {
     expect(screen.getByText('1024 × 768')).toBeInTheDocument()
   })
 
-  it('does not expose a permanent console in the product preview', () => {
+  it('exposes captured runtime output in an on-demand console', () => {
     render(<PreviewWorkbench html="<p>Ready</p>" />)
     expect(screen.queryByLabelText('Preview console')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Console/ })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Console (0)' }))
+    expect(screen.getByLabelText('Preview console')).toHaveTextContent('No runtime messages.')
   })
 
   it('holds incoming HTML while auto-refresh is off and applies it on manual refresh', () => {
@@ -93,7 +94,8 @@ describe('PreviewWorkbench', () => {
     dispatch({ type: 'lotus-preview-event', channel: 'test-channel', kind: 'console', payload: { level: 'info', args: ['started'] } })
     dispatch({ type: 'lotus-preview-event', channel: 'test-channel', kind: 'error', payload: { message: 'boom', source: 'app.js', line: 4, column: 2 } })
 
-    expect(screen.queryByText(/started/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Console (2)' }))
+    expect(screen.getByLabelText('Preview console')).toHaveTextContent('started')
     expect(screen.getByRole('alert')).toHaveTextContent('boom')
     expect(screen.getByRole('alert')).toHaveTextContent('app.js:4:2')
   })

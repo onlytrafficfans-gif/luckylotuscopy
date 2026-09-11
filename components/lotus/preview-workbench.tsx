@@ -50,7 +50,8 @@ export function PreviewWorkbench({ html, diagnostics = [], initialDevice = 'phon
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [manualHtml, setManualHtml] = useState(html)
   const [revision, setRevision] = useState(0)
-  const [, setConsoleEntries] = useState<ConsoleEntry[]>([])
+  const [consoleEntries, setConsoleEntries] = useState<ConsoleEntry[]>([])
+  const [consoleOpen, setConsoleOpen] = useState(false)
   const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null)
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 })
   const frameRef = useRef<HTMLIFrameElement>(null)
@@ -219,6 +220,9 @@ export function PreviewWorkbench({ html, diagnostics = [], initialDevice = 'phon
         <span>{fitToStage ? `${Math.round(displayScale * 100)}%` : `${zoom}%`}</span><input aria-label="Preview zoom" type="range" min={25} max={200} step={1} value={fitToStage ? Math.round(displayScale * 100) : zoom} onChange={(event) => { setFitToStage(false); setZoom(Number(event.target.value)) }} className="w-16"/>
       </label>
       <div className="ml-auto flex flex-shrink-0 items-center gap-1">
+        <button type="button" aria-label={`Console (${consoleEntries.length})`} aria-expanded={consoleOpen} onClick={() => setConsoleOpen((value) => !value)} className="inline-flex h-8 items-center gap-1 rounded-md border border-[var(--border)] px-2 text-[10px] font-semibold text-[var(--muted-foreground)] hover:bg-[var(--muted)]">
+          Console {consoleEntries.length > 0 && <span className="rounded bg-[var(--muted)] px-1 tabular-nums">{consoleEntries.length}</span>}
+        </button>
         <label className="flex items-center gap-1 text-[10px] text-[var(--muted-foreground)]"><input aria-label="Auto-refresh preview" type="checkbox" checked={autoRefresh} onChange={(event) => { if (!event.target.checked) setManualHtml(html); setAutoRefresh(event.target.checked) }}/> Auto</label>
         <button type="button" aria-label="Download preview HTML" onClick={downloadPreview} className="rounded-md p-1.5 text-[var(--muted-foreground)] hover:bg-[var(--muted)]"><Download size={13}/></button>
       </div>
@@ -276,6 +280,13 @@ export function PreviewWorkbench({ html, diagnostics = [], initialDevice = 'phon
        </div>
       </div>
     </div>
+
+    {consoleOpen && <section aria-label="Preview console" className="flex max-h-44 min-h-24 flex-col border-t border-[#2f2925] bg-[#171412] text-xs text-[#e9dfd8]">
+      <div className="flex items-center justify-between border-b border-white/10 px-3 py-2"><span className="font-semibold">Runtime console</span><button type="button" onClick={() => setConsoleEntries([])} disabled={consoleEntries.length === 0} className="rounded px-2 py-1 text-[10px] text-[#cbbdb4] hover:bg-white/10 disabled:opacity-40">Clear</button></div>
+      <div className="min-h-0 flex-1 overflow-auto p-2 font-mono">
+        {consoleEntries.length === 0 ? <p className="px-1 py-2 text-[#998c84]">No runtime messages.</p> : consoleEntries.map((entry) => <p key={entry.id} className={`border-b border-white/5 px-1 py-1.5 ${entry.level === 'error' ? 'text-red-300' : entry.level === 'warn' ? 'text-amber-300' : 'text-[#ddd3cc]'}`}><span className="mr-2 uppercase text-[9px] opacity-60">{entry.level}</span>{entry.text}</p>)}
+      </div>
+    </section>}
 
   </section>
 }
