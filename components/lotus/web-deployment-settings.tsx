@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState, useTransition } from 'react'
-import { ExternalLink, RefreshCw, Rocket, ShieldCheck } from 'lucide-react'
-import { createVercelPreviewAction, listWebDeploymentsAction, promoteVercelDeploymentAction, refreshVercelDeploymentAction } from '@/app/actions/projects'
+import { ExternalLink, GitBranch, RefreshCw, Rocket, ShieldCheck } from 'lucide-react'
+import { createVercelPreviewAction, listWebDeploymentsAction, promoteVercelDeploymentAction, publishProjectToGitHubAction, refreshVercelDeploymentAction } from '@/app/actions/projects'
 import { IntegrationSettings } from '@/components/lotus/integration-settings'
 import type { DeploymentRecord } from '@/lib/deployment-records'
 
@@ -10,6 +10,7 @@ export function WebDeploymentSettings({ projectId }: { projectId: string }) {
   const [deployments, setDeployments] = useState<DeploymentRecord[]>([])
   const [message, setMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [repositoryUrl, setRepositoryUrl] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
   useEffect(() => {
@@ -51,12 +52,20 @@ export function WebDeploymentSettings({ projectId }: { projectId: string }) {
     })
   }
 
+  function publishGitHub() {
+    if (!window.confirm('Create a new private GitHub repository containing every current project file?')) return
+    setMessage(null)
+    startTransition(async()=>{const result=await publishProjectToGitHubAction(projectId,true);if(!result.ok){setMessage(result.error);return}setRepositoryUrl(result.published.url);setMessage(`Published ${result.published.repository} on ${result.published.branch}.`)})
+  }
+
   return <div className="mt-7 grid gap-5">
     <section className="rounded-2xl border border-[#eadfd8] bg-white p-5 dark:border-white/10 dark:bg-white/5">
       <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">Web deployment</h2><p className="mt-1 text-sm text-[#806b60] dark:text-[#bba99f]">Ship a real Vercel Preview first, inspect it, then explicitly promote the same project to production.</p></div><button type="button" onClick={createPreview} disabled={pending || loading} className="inline-flex items-center gap-2 rounded-xl bg-[#e98b66] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"><Rocket size={16}/>{pending ? 'Working…' : 'Deploy preview'}</button></div>
       {message && <p role="status" className="mt-4 rounded-xl border border-[#eadfd8] bg-[#fff8f3] px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5">{message}</p>}
       <div className="mt-5"><IntegrationSettings providerIds={['vercel']}/></div>
     </section>
+
+    <section className="rounded-2xl border border-[#eadfd8] bg-white p-5 dark:border-white/10 dark:bg-white/5"><div className="flex flex-wrap items-start justify-between gap-4"><div><div className="flex items-center gap-2"><GitBranch size={18}/><h2 className="text-lg font-semibold">Git workspace</h2></div><p className="mt-1 text-sm text-[#806b60]">Create a private GitHub repository with the complete project in one atomic commit.</p></div>{repositoryUrl?<a href={repositoryUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-xl border px-4 py-2 text-sm font-semibold">Open repository <ExternalLink size={14}/></a>:<button type="button" onClick={publishGitHub} disabled={pending} className="rounded-xl bg-[#332721] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Publish to GitHub</button>}</div><div className="mt-4"><IntegrationSettings providerIds={['github']}/></div></section>
 
     <section className="rounded-2xl border border-[#eadfd8] bg-white p-5 dark:border-white/10 dark:bg-white/5">
       <div className="flex items-center gap-2"><ShieldCheck size={19} className="text-emerald-600"/><h2 className="text-lg font-semibold">Deployment history</h2></div>

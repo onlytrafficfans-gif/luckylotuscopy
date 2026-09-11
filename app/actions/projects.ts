@@ -28,6 +28,7 @@ import { createVercelClient } from '@/lib/vercel-deployment'
 import { createDeploymentRecord, getDeploymentRecord, listDeploymentRecords, markDeploymentPromoted, updateDeploymentRecord } from '@/lib/deployment-records'
 import { projectFrameworkSchema } from '@/lib/project-framework'
 import { generateBackendArtifacts } from '@/lib/backend-artifacts'
+import { publishGitHubRepository } from '@/lib/github-publish'
 
 async function getUserId() {
   return (await requireCurrentUser()).id
@@ -205,6 +206,19 @@ export async function importGitHubRepositoryAction(input: unknown) {
         await projects.permanentlyDelete(userId, created.id)
       } catch { /* Preserve the original import failure. */ }
     }
+    return { ok: false as const, error: githubActionError(error) }
+  }
+}
+
+export async function publishProjectToGitHubAction(projectId: string, privateRepository = true) {
+  try {
+    const userId = await getUserId()
+    const project = await projects.get(userId, projectId)
+    if (!project || project.status !== 'active') throw new Error('Project not found.')
+    const [files, specification, token] = await Promise.all([projects.listFiles(userId, projectId), projects.getSpecification(userId, projectId), githubConnection(userId)])
+    const published = await publishGitHubRepository(token, { name: project.name, description: specification.product.description.slice(0,350), private: privateRepository, files: files.map(file=>({path:file.path,content:file.content})) })
+    return { ok: true as const, published }
+  } catch (error) {
     return { ok: false as const, error: githubActionError(error) }
   }
 }

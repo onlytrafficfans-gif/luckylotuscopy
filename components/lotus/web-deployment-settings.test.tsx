@@ -5,13 +5,14 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const actions = vi.hoisted(() => ({
-  list: vi.fn(), create: vi.fn(), refresh: vi.fn(), promote: vi.fn(),
+  list: vi.fn(), create: vi.fn(), refresh: vi.fn(), promote: vi.fn(), publish: vi.fn(),
 }))
 vi.mock('@/app/actions/projects', () => ({
   listWebDeploymentsAction: actions.list,
   createVercelPreviewAction: actions.create,
   refreshVercelDeploymentAction: actions.refresh,
   promoteVercelDeploymentAction: actions.promote,
+  publishProjectToGitHubAction: actions.publish,
 }))
 vi.mock('@/components/lotus/integration-settings', () => ({ IntegrationSettings: () => <div>Vercel connection</div> }))
 
@@ -46,5 +47,13 @@ describe('web deployment settings', () => {
     render(<WebDeploymentSettings projectId="project-1" />)
     fireEvent.click(await screen.findByRole('button', { name: 'Deploy preview' }))
     expect(await screen.findByRole('status')).toHaveTextContent('Connect Vercel')
+  })
+
+  it('creates a private GitHub repository only after confirmation', async () => {
+    actions.publish.mockResolvedValue({ ok: true, published: { repository: 'lotus/app', url: 'https://github.com/lotus/app', branch: 'main' } })
+    render(<WebDeploymentSettings projectId="project-1" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Publish to GitHub' }))
+    await waitFor(()=>expect(actions.publish).toHaveBeenCalledWith('project-1',true))
+    expect(await screen.findByRole('link', { name: /Open repository/ })).toHaveAttribute('href','https://github.com/lotus/app')
   })
 })
