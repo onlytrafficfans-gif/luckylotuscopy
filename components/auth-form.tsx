@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Image from 'next/image'
+import Link from 'next/link'
 import { Eye, EyeOff, ShieldCheck } from 'lucide-react'
 
 export function AuthForm({ initialMode = 'sign-in' }: { initialMode?: 'sign-in' | 'sign-up' }) {
@@ -20,6 +21,7 @@ export function AuthForm({ initialMode = 'sign-in' }: { initialMode?: 'sign-in' 
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [acceptedTerms,setAcceptedTerms]=useState(false)
 
   const isSignUp = panelMode === 'sign-up'
 
@@ -56,7 +58,7 @@ export function AuthForm({ initialMode = 'sign-in' }: { initialMode?: 'sign-in' 
       <Image src="/lucky-lotus-login-bg.png" alt="Lucky Lotus garden at sunset" fill priority sizes="100vw" className="object-cover object-center"/>
       <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,.12),transparent_35%,transparent_70%,rgba(0,0,0,.18))]" aria-hidden="true"/>
 
-      <div className="absolute inset-0 z-10 grid place-items-center overflow-y-auto px-4 py-10 sm:px-8">
+      <div className="absolute inset-0 z-10 grid place-items-center overflow-y-auto px-4 pb-24 pt-10 sm:px-8">
       <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="auth-title" tabIndex={-1} className="relative w-full max-w-[430px] rounded-[28px] border border-white/45 bg-white/[.12] p-6 shadow-[0_24px_80px_rgba(0,0,0,.28)] backdrop-blur-md outline-none sm:p-9">
         <div className="flex justify-center"><Image src="/lucky-lotus-logo.png" alt="Lucky Lotus" width={260} height={180} className="h-auto w-[210px] object-contain drop-shadow-[0_8px_24px_rgba(235,156,47,.28)]" priority/></div>
         <div className="mt-4 text-center">
@@ -111,6 +113,7 @@ export function AuthForm({ initialMode = 'sign-in' }: { initialMode?: 'sign-in' 
             /><button type="button" onClick={()=>setShowPassword(value=>!value)} className="absolute inset-y-0 right-0 grid w-12 place-items-center text-[#d7b779] hover:text-[#ffd98f]" aria-label={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></div>
           </div>
           {isSignUp && <div className="flex flex-col gap-2"><Label htmlFor="confirm-password" className="text-[#f6e9d5]">Confirm password</Label><Input id="confirm-password" className="h-12 border-[#d8a45f]/45 bg-white/[.08] text-white focus-visible:border-[#efb85f] focus-visible:ring-[#efb85f]/25" type={showPassword?'text':'password'} value={confirmPassword} onChange={(event)=>setConfirmPassword(event.target.value)} required minLength={8} maxLength={128} autoComplete="new-password"/></div>}
+          {isSignUp&&<label className="flex items-start gap-3 text-xs leading-5 text-[#d9c9b4]"><input type="checkbox" required checked={acceptedTerms} onChange={e=>setAcceptedTerms(e.target.checked)} className="mt-1"/><span>I agree to the <Link href="/legal/terms" target="_blank" className="text-[#f4bd63] underline">Terms of Service</Link> and acknowledge the <Link href="/legal/privacy" target="_blank" className="text-[#f4bd63] underline">Privacy Policy</Link>.</span></label>}
 
           {error && (
             <p className="rounded-lg border border-red-400/30 bg-red-950/50 px-3 py-2 text-sm text-red-200" role="alert">
@@ -118,7 +121,7 @@ export function AuthForm({ initialMode = 'sign-in' }: { initialMode?: 'sign-in' 
             </p>
           )}
 
-          <Button type="submit" disabled={loading} className="mt-2 h-12 w-full border border-[#ffce73] bg-[linear-gradient(135deg,#8f4e12,#e5a23b_48%,#8c4a11)] text-sm font-bold text-[#140c03] shadow-[0_10px_30px_rgba(214,137,36,.28)] hover:brightness-110">
+          <Button type="submit" disabled={loading||(isSignUp&&!acceptedTerms)} className="mt-2 h-12 w-full border border-[#ffce73] bg-[linear-gradient(135deg,#8f4e12,#e5a23b_48%,#8c4a11)] text-sm font-bold text-[#140c03] shadow-[0_10px_30px_rgba(214,137,36,.28)] hover:brightness-110">
             {loading
               ? 'Please wait...'
               : isSignUp
@@ -141,6 +144,7 @@ export function AuthForm({ initialMode = 'sign-in' }: { initialMode?: 'sign-in' 
         <p className="mt-6 flex items-center justify-center gap-2 text-center text-xs text-[#a99883]"><ShieldCheck size={14}/>Your workspace stays private and encrypted.</p>
       </section>
       </div>
+      <footer className="absolute inset-x-0 bottom-0 z-20 flex flex-wrap justify-center gap-x-5 gap-y-2 bg-black/35 px-4 py-4 text-[11px] text-white/75 backdrop-blur-sm">{[['Terms','terms'],['Privacy','privacy'],['Cookie Policy','cookies'],['Acceptable Use','acceptable'],['AI & BYOK Notice','ai']].map(([label,path])=><Link key={path} href={`/legal/${path}`} className="hover:text-white hover:underline">{label}</Link>)}</footer>
     </main>
   )
 }

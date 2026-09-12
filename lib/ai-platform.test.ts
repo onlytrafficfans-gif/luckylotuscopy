@@ -44,6 +44,8 @@ describe('Lotus AI platform', () => {
     const plan = createRoutingPlan({ prompt: 'Create a normal application feature', mode: 'auto', costPreference: 'balanced', providers: { anthropic: true, openrouter: true }, maxEscalationLevel: 5 })
     expect(new Set(plan.attempts.map(item => item.alias)).size).toBe(plan.attempts.length)
     expect(plan.attempts.at(-1)?.alias).toBe('lotus.flagship')
+    const capped=createRoutingPlan({prompt:'Create a normal application feature',mode:'auto',costPreference:'balanced',providers:{anthropic:true,openrouter:true},maxEscalationLevel:3})
+    expect(capped.attempts.map(item=>item.alias)).not.toContain('lotus.flagship')
   })
 
   it('normalizes actual provider usage without fabricating missing cost or balance', () => {
@@ -54,5 +56,8 @@ describe('Lotus AI platform', () => {
   it('estimates task size and strips provider secrets from public errors', () => {
     expect(estimateTaskSize({ prompt: 'x', contextCharacters: 900_000 }).label).toBe('Very Large')
     expect(sanitizeProviderError(new Error('401 invalid sk-ant-secret-value'))).not.toContain('sk-ant')
+    expect(sanitizeProviderError(new Error('429 rate limit reached'))).toBe('The provider is temporarily rate limited.')
+    expect(sanitizeProviderError('offline')).toBe('The AI provider could not complete the request.')
+    expect(estimateTaskSize({prompt:'x',contextCharacters:50_000}).label).toBe('Medium')
   })
 })

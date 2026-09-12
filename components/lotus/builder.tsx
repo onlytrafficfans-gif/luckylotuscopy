@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Sparkles,
@@ -18,6 +18,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { assembleStaticPreview, type PreviewDiagnostic } from "@/lib/preview-runtime";
 import { AuthSignOut } from "@/components/auth-sign-out";
+import { classifyTask, estimateTaskSize } from "@/lib/ai-platform";
+import { getAiPreferencesAction } from "@/app/actions/ai";
 
 const logoLotus = "/lucky-lotus-logo.png";
 
@@ -171,12 +173,18 @@ export default function App({ initial }: LotusBuilderProps) {
   const [builderFiles, setBuilderFiles] = useState<EditorFile[]>(initial.files);
   const [entryPath, setEntryPath] = useState(initial.entryPath);
   const [input,     setInput]     = useState("");
+  const [modelMode, setModelMode] = useState<'auto'|'build'|'fast'|'economy'|'free'>('auto');
+  const taskEstimate = useMemo(() => estimateTaskSize({ prompt: input, contextCharacters: builderFiles.reduce((total,file)=>total+file.content.length,0) }), [builderFiles,input]);
   const [isTyping,  setIsTyping]  = useState(false);
   const [view,      setView]      = useState<BuildView>("preview");
+
+  useEffect(()=>{getAiPreferencesAction().then(profile=>setModelMode(profile.defaultMode)).catch(()=>{})},[]);
 
   // UI open/close
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [largeTask,setLargeTask]=useState<{text:string;label:'Large'|'Very Large'}|null>(null);
+  const [downgradeTask,setDowngradeTask]=useState<string|null>(null);
   const [checkpoints, setCheckpoints] = useState<ProjectCheckpointSummary[]>([]);
   const [checkpointBusy, setCheckpointBusy] = useState(false);
 
@@ -213,8 +221,10 @@ export default function App({ initial }: LotusBuilderProps) {
     return () => { cancelled = true; window.clearTimeout(timeout); };
   }, [builderFiles, entryPath, initial.runtime, projectId]);
 
-  async function handleSend(text = input.trim()) {
+  async function handleSend(text = input.trim(), approved = false, modeOverride?: typeof modelMode, allowDowngrade = false) {
     if (!text || isTyping) return;
+    const requestEstimate=estimateTaskSize({prompt:text,contextCharacters:builderFiles.reduce((total,file)=>total+file.content.length,0)});
+    if (!approved && (requestEstimate.label==='Large'||requestEstimate.label==='Very Large') && (modelMode === 'build' || (modelMode === 'auto' && classifyTask({prompt:text,contextCharacters:builderFiles.reduce((total,file)=>total+file.content.length,0)}).level >= 4))) { setLargeTask({text,label:requestEstimate.label}); return; }
     const safeText = redactSensitiveValues(text);
     setInput("");
     setIsTyping(true);
@@ -223,15 +233,18 @@ export default function App({ initial }: LotusBuilderProps) {
       const result = await runBuildAction({
         projectId,
         prompt: text,
-        model: "default",
+        model: modeOverride ?? modelMode,
         currentHtml: builderFiles.find(file => file.path === entryPath)?.content ?? generatedHtml,
         context: {},
+        allowDowngrade,
       });
       if (!result.ok) {
+        if(result.confirmation==='downgrade'){setDowngradeTask(text);return;}
         toast.error(result.error);
         return;
       }
       const res = result.data;
+      if (res.routingNotice) toast.info(res.routingNotice);
       setProjectId(res.projectId);
       setProjectName(res.name);
       const nextFiles = builderFiles.map(file => file.path === res.entryPath ? { ...file, content: res.html, version: res.version } : file);
@@ -383,6 +396,8 @@ export default function App({ initial }: LotusBuilderProps) {
 
           {view === "preview" && <div className="mt-2 flex flex-shrink-0 items-center gap-2 rounded-[18px] border border-[#eadfd8] bg-white p-2 shadow-[0_10px_30px_rgba(93,56,34,0.08)] sm:mt-4 sm:gap-3 sm:p-4">
             <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-[#f0e2d9] text-[#f29a70] shadow-sm"><Sparkles size={25}/></span>
+            <select aria-label="AI mode" value={modelMode} onChange={e=>setModelMode(e.target.value as typeof modelMode)} className="h-10 rounded-xl border border-[#eadfd8] bg-[#fffaf6] px-2 text-[11px] font-bold text-[#5f4a3f] outline-none"><option value="auto">AUTO</option><option value="build">BUILD</option><option value="fast">FAST</option><option value="economy">ECONOMY</option><option value="free">FREE</option></select>
+            <span title={`${taskEstimate.anticipatedTokens.toLocaleString()} anticipated tokens`} className="hidden rounded-full bg-[#fff3eb] px-2 py-1 text-[10px] font-semibold text-[#806b60] xl:inline">{taskEstimate.label}</span>
             <textarea value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); handleSend(); } }} rows={1} placeholder="Describe the app you want to build..." className="min-w-0 flex-1 resize-none bg-transparent px-2 py-3 text-base text-[#2d211b] outline-none placeholder:text-[#806b60]"/>
             <motion.button whileTap={{scale:0.98}} onClick={()=>handleSend()} disabled={!input.trim() || isTyping} className="inline-flex h-12 flex-shrink-0 items-center gap-2 rounded-xl bg-gradient-to-r from-[#ffb17f] to-[#e8835f] px-4 text-sm font-semibold text-white shadow-[0_7px_20px_rgba(232,131,95,0.3)] disabled:opacity-60 sm:px-7 sm:text-base"><Sparkles size={19}/><span className="hidden sm:inline">Generate App</span><span className="sm:hidden">Generate</span></motion.button>
           </div>}
@@ -407,6 +422,8 @@ export default function App({ initial }: LotusBuilderProps) {
       {/* ── Modals ── */}
       <AnimatePresence>
         {showHistory && <CheckpointPanel checkpoints={checkpoints} busy={checkpointBusy} onCreate={createCheckpoint} onRestore={restoreCheckpoint} onClose={()=>setShowHistory(false)}/>}
+        {largeTask&&<Modal title="Large Build task" onClose={()=>setLargeTask(null)}><div className="p-5"><p className="text-sm leading-6 text-[var(--muted-foreground)]">This is a {largeTask.label.toLowerCase()} Build task. Lotus selected Fable 5.1 for maximum reliability.</p><div className="mt-5 flex flex-wrap gap-2"><button onClick={()=>{const text=largeTask.text;setLargeTask(null);void handleSend(text,true,'build')}} className="rounded-xl bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-[var(--primary-foreground)]">Run with Fable</button><button onClick={()=>{const text=largeTask.text;setLargeTask(null);void handleSend(text,true,'economy')}} className="rounded-xl border border-[var(--border)] px-4 py-2 text-sm">Use Economy</button><button onClick={()=>setLargeTask(null)} className="rounded-xl px-4 py-2 text-sm text-[var(--muted-foreground)]">Cancel</button></div></div></Modal>}
+        {downgradeTask&&<Modal title="Primary model unavailable" onClose={()=>setDowngradeTask(null)}><div className="p-5"><p className="text-sm leading-6 text-[var(--muted-foreground)]">Your primary model is temporarily unavailable. Lotus can continue with a lower-cost model or retry the primary engine.</p><div className="mt-5 flex gap-2"><button onClick={()=>{const text=downgradeTask;setDowngradeTask(null);void handleSend(text,true,undefined,true)}} className="rounded-xl bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-[var(--primary-foreground)]">Continue</button><button onClick={()=>{const text=downgradeTask;setDowngradeTask(null);void handleSend(text,true)}} className="rounded-xl border border-[var(--border)] px-4 py-2 text-sm">Retry</button></div></div></Modal>}
       </AnimatePresence>
     </div>
   );

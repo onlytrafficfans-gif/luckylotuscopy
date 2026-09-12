@@ -1,0 +1,6 @@
+import Link from 'next/link'
+import { notFound } from 'next/navigation'
+import { LEGAL_DOCUMENTS, LEGAL_EFFECTIVE_DATE, type LegalDocumentKey } from '@/lib/legal-documents'
+
+export function generateStaticParams(){return Object.keys(LEGAL_DOCUMENTS).map(document=>({document}))}
+export default async function LegalPage({params}:{params:Promise<{document:string}>}){const {document}=await params;if(!(document in LEGAL_DOCUMENTS))notFound();const item=LEGAL_DOCUMENTS[document as LegalDocumentKey];return <main className="min-h-svh bg-[#fffaf6] px-5 py-12 text-[#281f1a]"><article className="mx-auto max-w-3xl rounded-3xl border border-[#eadfd8] bg-white p-6 shadow-sm sm:p-10"><Link href="/sign-in" className="text-sm font-semibold text-[#b46743]">← Back to Lucky Lotus</Link><h1 className="mt-7 font-serif text-4xl font-semibold">{item.title}</h1><p className="mt-2 text-sm text-[#806b60]">Effective {LEGAL_EFFECTIVE_DATE}</p><div className="mt-9 space-y-8">{item.sections.map(([title,body])=><section key={title}><h2 className="text-lg font-semibold">{title}</h2><p className="mt-2 leading-7 text-[#665248]">{body}</p></section>)}</div><p className="mt-10 border-t border-[#eadfd8] pt-6 text-sm text-[#806b60]">Questions: <a className="underline" href="mailto:support@luckylotus.app">support@luckylotus.app</a></p></article></main>}

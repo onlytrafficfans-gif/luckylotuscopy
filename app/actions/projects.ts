@@ -30,6 +30,8 @@ import { projectFrameworkSchema } from '@/lib/project-framework'
 import { generateBackendArtifacts } from '@/lib/backend-artifacts'
 import { publishGitHubRepository } from '@/lib/github-publish'
 import { recordAnalyticsEvent } from '@/lib/workspace-features'
+import { createRoutingPlan, lotusModeSchema, normalizeUsage } from '@/lib/ai-platform'
+import { getAiProfile, getProviderKey, listProviderStatuses, recordAiUsage, recordProviderHealth, recordRoutingOutcome } from '@/lib/ai-account'
 
 async function getUserId() {
   return (await requireCurrentUser()).id
@@ -472,20 +474,6 @@ export async function restoreProjectFileAction(projectId: string, fileId: string
   return fileDto(restored)
 }
 
-// Friendly model labels from the Lucky Lotus UI -> AI Gateway model ids.
-const MODEL_MAP: Record<string, string> = {
-  'Enigma Auto': 'anthropic/claude-sonnet-4.5',
-  'GPT-4.1': 'openai/gpt-4.1',
-  'Claude Sonnet': 'anthropic/claude-sonnet-4.5',
-  'Claude Opus': 'anthropic/claude-opus-4.5',
-  'Gemini Pro': 'google/gemini-2.5-pro',
-  'DeepSeek Coder': 'anthropic/claude-sonnet-4.5',
-}
-
-function resolveModel(label: string) {
-  return MODEL_MAP[label] ?? 'anthropic/claude-sonnet-4.5'
-}
-
 const SYSTEM_PROMPT = `You are Lucky Lotus, an expert AI app builder. You generate a SINGLE, complete, self-contained HTML document that renders a polished, production-quality app screen.
 
 Hard rules:
@@ -562,6 +550,7 @@ export interface RunBuildInput {
   model: string
   currentHtml: string | null
   context?: BuildContext
+  allowDowngrade?: boolean
 }
 
 function buildContextBlock(ctx?: BuildContext): string {
@@ -583,11 +572,12 @@ export interface RunBuildResult {
   reply: string
   version: number
   entryPath: string
+  routingNotice?: string
 }
 
 export type RunBuildActionResult =
   | { ok: true; data: RunBuildResult }
-  | { ok: false; error: string }
+  | { ok: false; error: string; confirmation?: 'downgrade' }
 
 // Derive a short, human title for a project from the first prompt.
 function deriveName(prompt: string): string {
@@ -633,15 +623,6 @@ export async function runBuild(input: RunBuildInput): Promise<RunBuildResult> {
   const repositoryFiles = ((await projects.listFiles(userId, projectId)) ?? []).slice(0,100).map(file=>({path:file.path,content:redactSensitiveValues(file.content)}))
   const repositoryBlock = `\n\nCurrent repository files:\n${JSON.stringify(repositoryFiles)}`
 
-  // Persist the user's message immediately.
-  await appendProjectMessage({
-    id: id(),
-    projectId,
-    userId,
-    role: 'user',
-    content: safePrompt,
-  })
-
   // Build the prompt for the model, giving it the current app as context.
   const componentMode = runtime.runtime === 'react'
   const frameworkInstruction = `Return a JSON repository bundle with this exact shape: {"summary":"short description","files":[{"path":"relative/path","content":"complete file contents"}]}. Include ${generationEntry}. Return every file you create or change, with no markdown or commentary. The project framework is ${runtime.framework}. ${componentMode?'Use React and browser APIs supported by the existing preview adapter.':'Keep index.html runnable with the repository CSS and JavaScript files.'}`
@@ -651,22 +632,40 @@ export async function runBuild(input: RunBuildInput): Promise<RunBuildResult> {
 
   let html = entry.content
   let generatedBundle: GeneratedBundle | null = null
+  let routingNotice: string | undefined
   if (existingProject) await projects.createCheckpoint(userId,projectId,`Before: ${safePrompt.slice(0,92)}`)
   try {
-    const providerConfig = decryptAiProviderConfig((await cookies()).get(AI_PROVIDER_COOKIE)?.value, userId)
-    const { text } = await generateText({
-      model: generationModel(providerConfig, resolveModel(model)),
-      system: componentMode ? 'You are Lucky Lotus, an expert React application builder. Generate one complete, accessible React component module for a secure browser preview. Return code only.' : SYSTEM_PROMPT,
-      prompt: userContent,
-      maxOutputTokens: 8000,
-    })
-    const generated = redactSensitiveValues(text)
-    if (/^\s*(?:```json\s*)?\{/i.test(generated)) {
-      generatedBundle = parseGeneratedBundle(generated,generationEntry)
-      html = generatedBundle.files.find(file=>file.path===generationEntry)!.content
-    } else html = stripFences(generated)
+    if (!usePostgres) {
+      const providerConfig = decryptAiProviderConfig((await cookies()).get(AI_PROVIDER_COOKIE)?.value, userId)
+      const result = await generateText({ model:generationModel(providerConfig,'anthropic/claude-sonnet-4.5'), system:componentMode?'You are Lucky Lotus, an expert React application builder. Generate one complete, accessible React component module for a secure browser preview. Return code only.':SYSTEM_PROMPT, prompt:userContent, maxOutputTokens:8000 })
+      const generated=redactSensitiveValues(result.text)
+      if (/^\s*(?:```json\s*)?\{/i.test(generated)) { generatedBundle=parseGeneratedBundle(generated,generationEntry);html=generatedBundle.files.find(file=>file.path===generationEntry)!.content } else html=stripFences(generated)
+    } else {
+    const [profile,statuses] = await Promise.all([getAiProfile(userId),listProviderStatuses(userId)])
+    const requestedMode = lotusModeSchema.catch(profile.defaultMode).parse(model === 'default' ? profile.defaultMode : model)
+    const plan = createRoutingPlan({prompt:safePrompt,mode:requestedMode,costPreference:profile.costPreference,maxEscalationLevel:profile.maxEscalationLevel,providers:{anthropic:Boolean(statuses.find(item=>item.provider==='anthropic')?.connected),openrouter:Boolean(statuses.find(item=>item.provider==='openrouter')?.connected)},contextCharacters:userContent.length,likelyFiles:repositoryFiles.length,toolsRequired:true})
+    if (plan.requiresDowngradeConsent) throw new Error('Your primary model is temporarily unavailable. Connect Anthropic or choose Fast to continue with a lower-cost model.')
+    if (!plan.attempts.length) throw new Error('Connect Anthropic or OpenRouter in Settings before generating.')
+    const startedAt=Date.now(); let lastFailure:unknown; let usageTotal=0
+    const executionModels=plan.attempts.flatMap(selected=>[selected,...(selected.fallbackIds??[]).map(id=>({...selected,id,fallbackIds:undefined}))])
+    for (const [attemptIndex,selected] of executionModels.entries()) {
+      const key=await getProviderKey(userId,selected.provider)
+      if(!key)continue
+      try {
+        const result=await generateText({model:generationModel({provider:selected.provider,apiKey:key,model:selected.id,baseURL:selected.provider==='openrouter'?'https://openrouter.ai/api/v1':''},selected.id),system:componentMode?'You are Lucky Lotus, an expert React application builder. Return a complete accessible repository bundle as requested.':'You are Lucky Lotus, an expert application builder. '+SYSTEM_PROMPT,prompt:userContent,maxOutputTokens:8000})
+        await recordProviderHealth(userId,selected.provider,true).catch(()=>{})
+        const generated=redactSensitiveValues(result.text)
+        if (/^\s*(?:```json\s*)?\{/i.test(generated)) { generatedBundle=parseGeneratedBundle(generated,generationEntry);html=generatedBundle.files.find(file=>file.path===generationEntry)!.content } else html=stripFences(generated)
+        const usage=normalizeUsage(result.usage as unknown as Record<string,unknown>);usageTotal+=usage.inputTokens+usage.outputTokens+usage.reasoningTokens+usage.cachedTokens;await recordAiUsage({userId,projectId,model:selected,usage:result.usage as unknown as Record<string,unknown>,requestType:'builder.generate'});routingNotice=selected.alias!==plan.selected.alias?'Lotus upgraded the reasoning engine for this task.':undefined
+        await recordRoutingOutcome({userId,projectId,requestType:'builder.generate',selectedAlias:plan.selected.alias,complexityLevel:plan.classification.level,succeeded:true,validationSucceeded:true,escalated:selected.alias!==plan.selected.alias,finalAlias:selected.alias,latencyMs:Date.now()-startedAt,totalTokens:usageTotal,cost:usage.cost})
+        break
+      } catch(error) { lastFailure=error;await recordProviderHealth(userId,selected.provider,false,/429|rate/i.test(error instanceof Error?error.message:'')?'rate_limited':'request_failed').catch(()=>{});const next=executionModels[attemptIndex+1];if(!input.allowDowngrade&&plan.classification.level>=4&&selected.alias==='lotus.flagship'&&next&&next.alias!=='lotus.flagship')throw new Error('LOTUS_DOWNGRADE_REQUIRED');if(attemptIndex===executionModels.length-1){await recordRoutingOutcome({userId,projectId,requestType:'builder.generate',selectedAlias:plan.selected.alias,complexityLevel:plan.classification.level,succeeded:false,validationSucceeded:false,escalated:executionModels.some(item=>item.alias!==plan.selected.alias),finalAlias:null,latencyMs:Date.now()-startedAt,totalTokens:usageTotal,cost:null});throw error} }
+    }
+    if(lastFailure&&html===entry.content)throw lastFailure
+    }
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err)
+    if (raw === 'LOTUS_DOWNGRADE_REQUIRED') throw new Error(raw)
     // Surface common provider setup failures clearly instead of a generic error.
     if (/credit card|customer_verification_required|valid credit/i.test(raw)) {
       throw new Error(
@@ -674,8 +673,13 @@ export async function runBuild(input: RunBuildInput): Promise<RunBuildResult> {
       )
     }
     if (/401|403|unauthorized|invalid.*(?:api|key)|authentication/i.test(raw)) throw new Error('The selected AI provider rejected its API key. Update it in Settings and try again.')
+    if (/Connect Anthropic|Persistent AI|primary model/.test(raw)) throw new Error(raw)
     throw new Error('Generation failed. Check your server-side AI provider configuration and try again.')
   }
+
+  // Persist only once an execution model has completed. This avoids duplicate
+  // history when the user explicitly retries a provider or approves a fallback.
+  await appendProjectMessage({ id:id(),projectId,userId,role:'user',content:safePrompt })
 
   const reply = generatedBundle?.summary ?? (input.currentHtml
     ? 'Done — I applied your change and refreshed the live preview.'
@@ -696,7 +700,7 @@ export async function runBuild(input: RunBuildInput): Promise<RunBuildResult> {
 
   await track(userId,projectId,'builder.generated',{runtime:runtime.runtime,fileCount:generatedBundle?.files.length??1})
 
-  return { projectId, name: projectName, html, reply, version: updatedEntry.updatedAt.getTime(), entryPath: generationEntry }
+  return { projectId, name: projectName, html, reply, version: updatedEntry.updatedAt.getTime(), entryPath: generationEntry, routingNotice }
 }
 
 export async function runBuildAction(input: RunBuildInput): Promise<RunBuildActionResult> {
@@ -704,6 +708,7 @@ export async function runBuildAction(input: RunBuildInput): Promise<RunBuildActi
     return { ok: true, data: await runBuild(input) }
   } catch (error) {
     const message = error instanceof Error ? error.message : ''
+    if (message === 'LOTUS_DOWNGRADE_REQUIRED') return {ok:false,error:'Your primary model is temporarily unavailable. Lotus can continue with a lower-cost model or retry the primary engine.',confirmation:'downgrade'}
     if (input.projectId && message === 'Project not found.') {
       try {
         return { ok: true, data: await runBuild({ ...input, projectId: null }) }

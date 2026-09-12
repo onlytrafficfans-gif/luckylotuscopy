@@ -22,4 +22,11 @@ describe('AuthForm landing flow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create an account instead' }))
     expect(screen.getByRole('dialog', { name: 'Create an account' })).toBeInTheDocument()
   })
+
+  it('shows launch legal links on the authentication splash', () => {
+    render(<AuthForm initialMode="sign-in" />)
+    expect(screen.getByRole('link',{name:'Terms'})).toHaveAttribute('href','/legal/terms')
+    expect(screen.getByRole('link',{name:'Privacy'})).toHaveAttribute('href','/legal/privacy')
+    expect(screen.getByRole('link',{name:'AI & BYOK Notice'})).toHaveAttribute('href','/legal/ai')
+  })
 })
