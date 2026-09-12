@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation'
 import {
   ArrowUpRight, ChevronRight, CircleDot, Database, Eye, Folder,
   GitFork, Grid2X2, KeyRound, LayoutGrid, List, Menu, Monitor, Moon, MoreHorizontal, Plus,
-  Rocket, Search, Settings, Smartphone, Sun, X,
+  Rocket, Search, Settings, Smartphone, Sun, Users, X,
 } from 'lucide-react'
 import type { Project, UserSettings } from '@/lib/db/schema'
 import type { AiProviderStatus } from '@/lib/ai-provider'
@@ -28,16 +28,18 @@ import { TEMPLATE_CATALOG } from '@/lib/template-catalog'
 import { AuthSignOut } from '@/components/auth-sign-out'
 import { GitHubImportDialog } from '@/components/lotus/github-import-dialog'
 import { BackendWorkspace } from '@/components/lotus/backend-workspace'
+import { WorkspaceHub } from '@/components/lotus/workspace-hub'
 
 type DashboardProject = Pick<Project, 'id' | 'name' | 'status' | 'updatedAt'> & { framework: string }
 type DashboardSettings = Pick<UserSettings, 'theme' | 'editorFontSize' | 'autosaveInterval' | 'defaultDevice'>
-type ProductSection = 'projects' | 'templates' | 'backend' | 'preview' | 'deploy' | 'settings'
+type ProductSection = 'projects' | 'templates' | 'backend' | 'workspace' | 'preview' | 'deploy' | 'settings'
 type SettingsTab = 'General' | 'Appearance' | 'Environment' | 'AI Provider' | 'Integrations' | 'Deployment' | 'Danger Zone'
 
 const SECTIONS: Array<{ id: ProductSection; label: string; icon: typeof Folder }> = [
   { id: 'projects', label: 'Projects', icon: Folder },
   { id: 'templates', label: 'Templates', icon: Grid2X2 },
   { id: 'backend', label: 'Backend', icon: Database },
+  { id: 'workspace', label: 'Workspace', icon: Users },
   { id: 'preview', label: 'Preview', icon: Eye },
   { id: 'deploy', label: 'Deploy', icon: Rocket },
   { id: 'settings', label: 'Settings', icon: Settings },
@@ -112,6 +114,7 @@ export function ProductShell({ initialProjects, initialSettings, userName, initi
         {section === 'projects' && <ProjectsWorkspace projects={projects} pending={pending} onCreate={() => setNewProjectOpen(true)} onImport={() => setGitHubImportOpen(true)} onError={setError} onRefresh={() => router.refresh()} run={run}/>}
         {section === 'templates' && <TemplatesWorkspace pending={pending} run={run} router={router}/>}
         {section === 'backend' && <BackendWorkspace projects={projects.filter(project=>project.status==='active').map(project=>({id:project.id,name:project.name}))}/>}
+        {section === 'workspace' && <WorkspaceHub projects={projects.filter(project=>project.status==='active').map(project=>({id:project.id,name:project.name}))}/>}
         {section === 'preview' && <DedicatedPreview projects={projects.filter(project => project.status === 'active')}/>}
         {section === 'deploy' && <DeployWorkspace projects={projects.filter(project => project.status === 'active')}/>}
         {section === 'settings' && <SettingsWorkspace projects={projects.filter(project => project.status === 'active')} settings={settings} setSettings={setSettings} pending={pending} run={run} initialTab={initialSettingsTab}/>}
@@ -148,7 +151,7 @@ function ProductSidebar({ section, userName, drawerOpen, onClose, onNavigate }: 
         {SECTIONS.slice(0, -1).map(item => <SidebarButton key={item.id} item={item} active={section === item.id} onNavigate={onNavigate}/>)}
       </nav>
       <nav className="mt-auto border-t border-[#eadfd8] pt-4 dark:border-white/10"><SidebarButton item={SECTIONS.at(-1)!} active={section === 'settings'} onNavigate={onNavigate}/></nav>
-      <div className="mt-4 flex items-center gap-3 rounded-xl border border-[#eadfd8] bg-white p-3 dark:border-white/10 dark:bg-white/5"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#ffc399] text-xs font-bold text-[#4d3426]">{userName.slice(0,2).toUpperCase()}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{userName}</p><p className="text-xs text-[#806b60] dark:text-[#bba99f]">Account owner</p></div><AuthSignOut compact/></div>
+      <div className="mt-4 flex items-center gap-3 rounded-xl border border-[#eadfd8] bg-white p-3 dark:border-white/10 dark:bg-white/5"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#ffc399] text-xs font-bold text-[#4d3426]">{userName.slice(0,2).toUpperCase()}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{userName}</p><p className="text-xs text-[#806b60] dark:text-[#bba99f]">Workspace account</p></div><AuthSignOut compact/></div>
     </aside>
   </>
 }

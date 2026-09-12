@@ -6,7 +6,7 @@ import {
   Sparkles,
   Code2, Zap, X,
   Download, Copy, Eye, RotateCcw,
-  BookOpen, Database, Folder, Grid2X2, History, KeyRound, Menu, Rocket, Settings,
+  BookOpen, Database, Folder, Grid2X2, History, KeyRound, Menu, Rocket, Settings, Users,
 } from "lucide-react";
 import { PreviewWorkbench } from "@/components/lotus/preview-workbench";
 import { EditorWorkspace } from "@/components/lotus/editor-workspace";
@@ -296,6 +296,7 @@ export default function App({ initial }: LotusBuilderProps) {
           <Link href="/" className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-[#5f4a3f] hover:bg-[#fff6f0]"><Folder size={19}/>Projects</Link>
           <Link href="/?section=templates" className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-[#5f4a3f] hover:bg-[#fff6f0]"><Grid2X2 size={19}/>Templates</Link>
           <Link href="/?section=backend" className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-[#5f4a3f] hover:bg-[#fff6f0]"><Database size={19}/>Backend</Link>
+          <Link href="/?section=workspace" className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-[#5f4a3f] hover:bg-[#fff6f0]"><Users size={19}/>Workspace</Link>
           <button type="button" onClick={()=>{setView("preview");setMobileNavOpen(false)}} className="flex items-center gap-3 rounded-xl bg-[#fff0e5] px-4 py-3 text-left text-sm font-semibold text-[#3c2a20]"><Eye size={19}/>Preview</button>
           <Link href="/?section=deploy" className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-[#5f4a3f] hover:bg-[#fff6f0]"><Rocket size={19}/>Deploy</Link>
         </nav>

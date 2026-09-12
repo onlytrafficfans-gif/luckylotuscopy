@@ -29,6 +29,7 @@ import { createDeploymentRecord, getDeploymentRecord, listDeploymentRecords, mar
 import { projectFrameworkSchema } from '@/lib/project-framework'
 import { generateBackendArtifacts } from '@/lib/backend-artifacts'
 import { publishGitHubRepository } from '@/lib/github-publish'
+import { recordAnalyticsEvent } from '@/lib/workspace-features'
 
 async function getUserId() {
   return (await requireCurrentUser()).id
@@ -81,6 +82,11 @@ function fileDto(file: Awaited<ReturnType<typeof projects.getFile>> extends infe
 function refreshProjectViews(projectId?: string) {
   revalidatePath('/')
   if (projectId) revalidatePath(`/projects/${projectId}`)
+}
+
+async function track(userId:string, projectId:string, name:string, properties:Record<string,unknown>={}) {
+  if (!usePostgres) return
+  try { await recordAnalyticsEvent(userId,projectId,{name,properties}) } catch { /* Analytics must never break a core project action. */ }
 }
 
 export async function getProjectDashboard() {
@@ -313,6 +319,7 @@ export async function createVercelPreviewAction(projectId: string) {
       files: files.map(file => ({ path: file.path, content: file.content })),
     })
     const deployment = await createDeploymentRecord(userId, projectId, state)
+    await track(userId,projectId,'deployment.preview_created',{framework:runtime.framework})
     refreshProjectViews(projectId)
     return { ok: true as const, deployment }
   } catch (error) {
@@ -341,6 +348,7 @@ export async function promoteVercelDeploymentAction(projectId: string, recordId:
     if (!record || record.status !== 'ready' || record.target !== 'preview') throw new Error('Only a ready preview deployment can be promoted.')
     await createVercelClient(await vercelToken(userId)).promote(record)
     const deployment = await markDeploymentPromoted(userId, projectId, recordId)
+    await track(userId,projectId,'deployment.promoted',{provider:'vercel'})
     refreshProjectViews(projectId)
     return { ok: true as const, deployment }
   } catch (error) {
@@ -351,7 +359,9 @@ export async function promoteVercelDeploymentAction(projectId: string, recordId:
 export async function createBlankProjectAction(input?: unknown) {
   const candidate = typeof input === 'string' ? { name: input } : input ?? {}
   const parsed = createProjectInputSchema.parse(candidate)
-  const created = await projects.createBlank(await getUserId(), parsed.name, parsed.framework)
+  const userId = await getUserId()
+  const created = await projects.createBlank(userId, parsed.name, parsed.framework)
+  await track(userId,created.id,'project.created',{framework:parsed.framework})
   refreshProjectViews(created.id)
   return created
 }
@@ -368,6 +378,7 @@ export async function createTemplateProjectAction(templateId: string) {
   if (!entry) throw new Error('Template project entry file is unavailable.')
   await projects.createFile(userId, created.id, { path: 'assets/hero.jpg', content: imageBase64 })
   await projects.updateFile(userId, created.id, entry.id, { content: renderStarterTemplate(template), expectedUpdatedAt: entry.updatedAt })
+  await track(userId,created.id,'project.template_created',{templateId})
   refreshProjectViews(created.id)
   return created
 }
@@ -682,6 +693,8 @@ export async function runBuild(input: RunBuildInput): Promise<RunBuildResult> {
     role: 'assistant',
     content: reply,
   })
+
+  await track(userId,projectId,'builder.generated',{runtime:runtime.runtime,fileCount:generatedBundle?.files.length??1})
 
   return { projectId, name: projectName, html, reply, version: updatedEntry.updatedAt.getTime(), entryPath: generationEntry }
 }

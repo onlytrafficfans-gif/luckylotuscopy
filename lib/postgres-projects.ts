@@ -63,20 +63,30 @@ function settingsValues(input: unknown): SettingsInput {
 }
 
 async function owned(executor: PostgresExecutor, userId: string, projectId: string, lock = false) {
-  const project = await row<Project>(executor, `SELECT * FROM project WHERE id = $1 AND "userId" = $2${lock ? ' FOR UPDATE' : ''}`, [projectId, userId])
+  const project = await row<Project>(executor, `SELECT p.* FROM project p LEFT JOIN project_member pm ON pm."projectId"=p.id AND pm."userId"=$2
+    WHERE p.id=$1 AND (p."userId"=$2 OR pm."userId" IS NOT NULL)${lock ? ' FOR UPDATE OF p' : ''}`, [projectId, userId])
   if (!project) throw new ProjectLifecycleError('Project not found.')
   return project
 }
 
 async function writable(executor: PostgresExecutor, userId: string, projectId: string) {
   const project = await owned(executor, userId, projectId, true)
+  const access = await row<{ allowed:boolean }>(executor, `SELECT (p."userId"=$2 OR pm.role='editor') AS allowed FROM project p
+    LEFT JOIN project_member pm ON pm."projectId"=p.id AND pm."userId"=$2 WHERE p.id=$1`, [projectId, userId])
+  if (!access?.allowed) throw new ProjectLifecycleError('This project is read-only for your account.')
   if (project.status !== 'active') throw new ProjectLifecycleError('Files can only be changed in an active project.')
   return project
 }
 
+async function manageable(executor: PostgresExecutor, userId: string, projectId: string) {
+  const project = await row<Project>(executor, 'SELECT * FROM project WHERE id=$1 AND "userId"=$2', [projectId, userId])
+  if (!project) throw new ProjectLifecycleError('Only the project owner can perform this action.')
+  return project
+}
+
 async function findFile(executor: PostgresExecutor, userId: string, projectId: string, fileId: string, includeTrashed = false) {
-  return row<ProjectFile>(executor, `SELECT f.* FROM project_file f JOIN project p ON p.id = f."projectId"
-    WHERE f.id = $1 AND f."projectId" = $2 AND p."userId" = $3${includeTrashed ? '' : ' AND f."deletedAt" IS NULL'} LIMIT 1`, [fileId, projectId, userId])
+  await owned(executor,userId,projectId)
+  return row<ProjectFile>(executor, `SELECT * FROM project_file WHERE id=$1 AND "projectId"=$2${includeTrashed ? '' : ' AND "deletedAt" IS NULL'} LIMIT 1`, [fileId,projectId])
 }
 
 async function availablePath(executor: PostgresExecutor, projectId: string, path: string, ignoredFileId?: string) {
@@ -103,9 +113,9 @@ export function createPostgresProjectService(pool: Pool) {
   }
 
   return {
-    async list(userId: string) { return rows<Project>(pool, 'SELECT * FROM project WHERE "userId" = $1 ORDER BY "updatedAt" DESC', [userId]) },
-    async listDashboard(userId: string) { return rows<Pick<Project, 'id' | 'name' | 'status' | 'updatedAt'> & { framework: string }>(pool, `SELECT p.id, p.name, p.status, p."updatedAt", COALESCE(r.framework, 'static') AS framework FROM project p LEFT JOIN project_runtime r ON r."projectId" = p.id WHERE p."userId" = $1 ORDER BY p."updatedAt" DESC LIMIT 100`, [userId]) },
-    async get(userId: string, projectId: string) { return (await row<Project>(pool, 'SELECT * FROM project WHERE id = $1 AND "userId" = $2 LIMIT 1', [projectId, userId])) ?? null },
+    async list(userId: string) { return rows<Project>(pool, `SELECT DISTINCT p.* FROM project p LEFT JOIN project_member pm ON pm."projectId"=p.id AND pm."userId"=$1 WHERE p."userId"=$1 OR pm."userId" IS NOT NULL ORDER BY p."updatedAt" DESC`, [userId]) },
+    async listDashboard(userId: string) { return rows<Pick<Project, 'id' | 'name' | 'status' | 'updatedAt'> & { framework: string }>(pool, `SELECT DISTINCT p.id,p.name,p.status,p."updatedAt",COALESCE(r.framework,'static') AS framework FROM project p LEFT JOIN project_runtime r ON r."projectId"=p.id LEFT JOIN project_member pm ON pm."projectId"=p.id AND pm."userId"=$1 WHERE p."userId"=$1 OR pm."userId" IS NOT NULL ORDER BY p."updatedAt" DESC LIMIT 100`, [userId]) },
+    async get(userId: string, projectId: string) { return (await row<Project>(pool, `SELECT p.* FROM project p LEFT JOIN project_member pm ON pm."projectId"=p.id AND pm."userId"=$2 WHERE p.id=$1 AND (p."userId"=$2 OR pm."userId" IS NOT NULL) LIMIT 1`, [projectId,userId])) ?? null },
     async getSpecification(userId: string, projectId: string) {
       await owned(pool, userId, projectId)
       const value = await row<{ specification: unknown }>(pool, 'SELECT specification FROM project_specification WHERE "projectId" = $1', [projectId])
@@ -138,7 +148,7 @@ export function createPostgresProjectService(pool: Pool) {
       return owned(pool, userId, projectId)
     },
     async rename(userId: string, projectId: string, name: string) {
-      const existing = await owned(pool, userId, projectId)
+      const existing = await manageable(pool, userId, projectId)
       if (existing.status === 'trashed') throw new ProjectLifecycleError('A trashed project cannot be renamed.')
       return row<Project>(pool, 'UPDATE project SET name = $1, "updatedAt" = now() WHERE id = $2 AND "userId" = $3 RETURNING *', [normalizedName(name), projectId, userId])
     },
@@ -158,38 +168,41 @@ export function createPostgresProjectService(pool: Pool) {
       return owned(pool, userId, copyId)
     },
     async archive(userId: string, projectId: string) {
-      const existing = await owned(pool, userId, projectId)
+      const existing = await manageable(pool, userId, projectId)
       if (existing.status !== 'active') throw new ProjectLifecycleError('This project cannot be archived.')
       return row<Project>(pool, `UPDATE project SET status = 'archived', "archivedAt" = now(), "deletedAt" = NULL, "updatedAt" = now() WHERE id = $1 AND "userId" = $2 RETURNING *`, [projectId, userId])
     },
     async restore(userId: string, projectId: string) {
-      const existing = await owned(pool, userId, projectId)
+      const existing = await manageable(pool, userId, projectId)
       if (existing.status === 'active') throw new ProjectLifecycleError('This project cannot be restored.')
       return row<Project>(pool, `UPDATE project SET status = 'active', "archivedAt" = NULL, "deletedAt" = NULL, "updatedAt" = now() WHERE id = $1 AND "userId" = $2 RETURNING *`, [projectId, userId])
     },
     async softDelete(userId: string, projectId: string) {
-      const existing = await owned(pool, userId, projectId)
+      const existing = await manageable(pool, userId, projectId)
       if (existing.status === 'trashed') throw new ProjectLifecycleError('This project is already in trash.')
       return row<Project>(pool, `UPDATE project SET status = 'trashed', "deletedAt" = now(), "updatedAt" = now() WHERE id = $1 AND "userId" = $2 RETURNING *`, [projectId, userId])
     },
     async permanentlyDelete(userId: string, projectId: string) {
-      const existing = await owned(pool, userId, projectId)
+      const existing = await manageable(pool, userId, projectId)
       if (existing.status !== 'trashed') throw new ProjectLifecycleError('Only trashed projects can be permanently deleted.')
       await pool.query(`DELETE FROM project WHERE id = $1 AND "userId" = $2 AND status = 'trashed'`, [projectId, userId])
     },
     async getRuntime(userId: string, projectId: string) {
-      return (await row<ProjectRuntime>(pool, `SELECT r.* FROM project_runtime r JOIN project p ON p.id = r."projectId" WHERE r."projectId" = $1 AND p."userId" = $2 LIMIT 1`, [projectId, userId])) ?? null
+      await owned(pool,userId,projectId)
+      return (await row<ProjectRuntime>(pool, 'SELECT * FROM project_runtime WHERE "projectId"=$1 LIMIT 1', [projectId])) ?? null
     },
     async listFiles(userId: string, projectId: string, options: { includeTrashed?: boolean } = {}) {
-      return rows<ProjectFile>(pool, `SELECT f.* FROM project_file f JOIN project p ON p.id = f."projectId" WHERE f."projectId" = $1 AND p."userId" = $2${options.includeTrashed ? '' : ' AND f."deletedAt" IS NULL'} ORDER BY f.path`, [projectId, userId])
+      await owned(pool,userId,projectId)
+      return rows<ProjectFile>(pool, `SELECT * FROM project_file WHERE "projectId"=$1${options.includeTrashed ? '' : ' AND "deletedAt" IS NULL'} ORDER BY path`, [projectId])
     },
     async getFile(userId: string, projectId: string, fileId: string, options: { includeTrashed?: boolean } = {}) { return (await findFile(pool, userId, projectId, fileId, options.includeTrashed)) ?? null },
     async getFileByPath(userId: string, projectId: string, path: string, options: { includeTrashed?: boolean } = {}) {
       const safePath = validatePath(path)
-      return (await row<ProjectFile>(pool, `SELECT f.* FROM project_file f JOIN project p ON p.id = f."projectId" WHERE f."projectId" = $1 AND f.path = $2 AND p."userId" = $3${options.includeTrashed ? '' : ' AND f."deletedAt" IS NULL'} LIMIT 1`, [projectId, safePath, userId])) ?? null
+      await owned(pool,userId,projectId)
+      return (await row<ProjectFile>(pool, `SELECT * FROM project_file WHERE "projectId"=$1 AND path=$2${options.includeTrashed ? '' : ' AND "deletedAt" IS NULL'} LIMIT 1`, [projectId,safePath])) ?? null
     },
     async createCheckpoint(userId: string, projectId: string, label: string) {
-      await owned(pool, userId, projectId)
+      await writable(pool, userId, projectId)
       const files = await rows<{ path:string; content:string; encoding:'utf-8'|'utf-16le' }>(pool, 'SELECT path, content, encoding FROM project_file WHERE "projectId" = $1 AND "deletedAt" IS NULL ORDER BY path', [projectId])
       const runtime = await row<Record<string, unknown>>(pool, 'SELECT runtime, framework, "buildTool", "entryPath", metadata FROM project_runtime WHERE "projectId" = $1', [projectId])
       const specification = await row<{ specification: unknown }>(pool, 'SELECT specification FROM project_specification WHERE "projectId" = $1', [projectId])
@@ -223,7 +236,7 @@ export function createPostgresProjectService(pool: Pool) {
     async restoreCheckpoint(userId: string, projectId: string, checkpointId: string) {
       await postgresTransaction(async client => {
         await writable(client, userId, projectId)
-        const checkpoint = await row<{ files:ProjectFileInput[]; runtime:{ runtime:string; framework:string; buildTool:string|null; entryPath:string; metadata:Record<string,string> }; specification:unknown }>(client, 'SELECT c.files, c.runtime, c.specification FROM project_checkpoint c JOIN project p ON p.id = c."projectId" WHERE c.id = $1 AND c."projectId" = $2 AND p."userId" = $3 FOR UPDATE', [checkpointId, projectId, userId])
+        const checkpoint = await row<{ files:ProjectFileInput[]; runtime:{ runtime:string; framework:string; buildTool:string|null; entryPath:string; metadata:Record<string,string> }; specification:unknown }>(client, 'SELECT files,runtime,specification FROM project_checkpoint WHERE id=$1 AND "projectId"=$2 FOR UPDATE', [checkpointId, projectId])
         if (!checkpoint) throw new ProjectLifecycleError('Checkpoint not found.')
         const files = checkpoint.files.map(validateFileInput)
         if (files.reduce((total, file) => total + file.bytes, 0) > MAX_PROJECT_BYTES) throw new ProjectLifecycleError('Checkpoint exceeds the project size limit.')
