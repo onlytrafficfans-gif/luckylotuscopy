@@ -5,7 +5,10 @@ import path from 'node:path'
 import * as schema from './schema'
 import { migrateDatabase } from './migrations'
 
-const databasePath = process.env.DATABASE_PATH ?? path.join(process.cwd(), 'data', 'lotus.db')
+const defaultDataDirectory = process.env.VERCEL
+  ? path.join('/tmp', 'lotus-app-builder')
+  : path.join(process.cwd(), 'data')
+const databasePath = process.env.DATABASE_PATH ?? path.join(defaultDataDirectory, 'lotus.db')
 fs.mkdirSync(path.dirname(databasePath), { recursive: true })
 
 const sqlite = new Database(databasePath)
