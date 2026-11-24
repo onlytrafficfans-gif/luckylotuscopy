@@ -24,6 +24,7 @@ const corsHeaders = (origin: string | null) => {
   if (origin && !allowedOrigins.has(origin)) return null
   return {
     ...(origin ? { 'Access-Control-Allow-Origin': origin } : {}),
+    ...(origin ? { 'Access-Control-Allow-Credentials': 'true' } : {}),
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Cookie, Expo-Origin',
     'Access-Control-Max-Age': '600',
@@ -76,7 +77,7 @@ Rules:
 - Keep copy concise, realistic, accessible, and useful on a phone screen.
 - Return the complete updated specification, a concise summary, and changed section IDs.`
 
-async function callOpenRouter(apiKey: string, model: string, prompt: string, currentSpecification: unknown) {
+async function callOpenRouter(apiKey: string, model: string, prompt: string, currentSpecification: unknown, signal: AbortSignal) {
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -101,7 +102,7 @@ async function callOpenRouter(apiKey: string, model: string, prompt: string, cur
       },
       max_tokens: 8_000,
     }),
-    signal: AbortSignal.timeout(55_000),
+    signal,
     cache: 'no-store',
   })
   if (!response.ok) throw new Error(`Provider returned ${response.status}`)
@@ -112,10 +113,23 @@ async function callOpenRouter(apiKey: string, model: string, prompt: string, cur
   const message = body.choices?.[0]?.message
   if (message?.refusal) throw new Error('The provider refused this request.')
   if (!message?.content) throw new Error('The provider returned no structured content.')
-  return { result: JSON.parse(message.content), usage: body.usage ?? {} }
+  const rawUsage = body.usage ?? {}
+  const promptDetails = rawUsage.prompt_tokens_details as Record<string, unknown> | undefined
+  const completionDetails = rawUsage.completion_tokens_details as Record<string, unknown> | undefined
+  return {
+    result: JSON.parse(message.content),
+    usage: {
+      ...rawUsage,
+      inputTokens: rawUsage.prompt_tokens,
+      outputTokens: rawUsage.completion_tokens,
+      reasoningTokens: completionDetails?.reasoning_tokens,
+      cachedTokens: promptDetails?.cached_tokens,
+      cost: rawUsage.cost ?? rawUsage.total_cost,
+    },
+  }
 }
 
-async function callAnthropic(apiKey: string, model: string, prompt: string, currentSpecification: unknown) {
+async function callAnthropic(apiKey: string, model: string, prompt: string, currentSpecification: unknown, signal: AbortSignal) {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -135,7 +149,7 @@ async function callAnthropic(apiKey: string, model: string, prompt: string, curr
       }],
       tool_choice: { type: 'tool', name: 'return_lotus_native_generation' },
     }),
-    signal: AbortSignal.timeout(55_000),
+    signal,
     cache: 'no-store',
   })
   if (!response.ok) throw new Error(`Provider returned ${response.status}`)
@@ -211,16 +225,20 @@ export async function POST(request: Request) {
     }
 
     const startedAt = Date.now()
+    const requestDeadline = startedAt + 55_000
     let generated: { result: unknown; usage: Record<string, unknown> } | undefined
     let model = candidates[0]
     for (const candidate of candidates) {
       const key = providerKeys[candidate.provider]
       if (!key) continue
+      const remainingMs = requestDeadline - Date.now()
+      if (remainingMs <= 0) break
+      const signal = AbortSignal.timeout(remainingMs)
       model = candidate
       try {
         generated = candidate.provider === 'anthropic'
-          ? await callAnthropic(key, candidate.id, body.prompt.trim(), currentSpecification)
-          : await callOpenRouter(key, candidate.id, body.prompt.trim(), currentSpecification)
+          ? await callAnthropic(key, candidate.id, body.prompt.trim(), currentSpecification, signal)
+          : await callOpenRouter(key, candidate.id, body.prompt.trim(), currentSpecification, signal)
         break
       } catch {
         // Try one configured fallback, without exposing provider details to the app.
