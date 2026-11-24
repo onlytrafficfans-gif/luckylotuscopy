@@ -175,7 +175,7 @@ export async function POST(request: Request) {
   const length = Number(request.headers.get('content-length') ?? 0)
   if (length > 150_000) return jsonError(413, 'The request is too large.', 'REQUEST_TOO_LARGE', headers)
 
-  let body: { prompt?: unknown; currentSpecification?: unknown }
+  let body: { prompt?: unknown; currentSpecification?: unknown; allowDowngrade?: unknown }
   try {
     body = await request.json()
   } catch {
@@ -209,6 +209,7 @@ export async function POST(request: Request) {
       openrouter: openrouterKey,
       anthropic: anthropicKey,
     }
+    const allowDowngrade = body.allowDowngrade === true
     const plan = createRoutingPlan({
       prompt: body.prompt.trim(),
       mode: profile.defaultMode,
@@ -219,7 +220,13 @@ export async function POST(request: Request) {
         anthropic: Boolean(anthropicKey),
       },
     })
-    const candidates = plan.attempts.slice(0, 2)
+    if (plan.requiresDowngradeConsent && !allowDowngrade) {
+      return jsonError(409, 'The selected model is not connected. Continue with a lower-tier Lotus model?', 'DOWNGRADE_CONSENT_REQUIRED', headers)
+    }
+    const plannedCandidates = plan.attempts.slice(0, 2)
+    const candidates = allowDowngrade && plan.selected.alias === 'lotus.flagship'
+      ? plannedCandidates.filter((candidate) => candidate.alias !== 'lotus.flagship')
+      : plannedCandidates
     if (!candidates.length) {
       return jsonError(409, 'Connect OpenRouter or Anthropic in your Lotus account before generating.', 'AI_PROVIDER_NOT_CONFIGURED', headers)
     }
@@ -228,7 +235,8 @@ export async function POST(request: Request) {
     const requestDeadline = startedAt + 55_000
     let generated: { result: unknown; usage: Record<string, unknown> } | undefined
     let model = candidates[0]
-    for (const candidate of candidates) {
+    for (let index = 0; index < candidates.length; index += 1) {
+      const candidate = candidates[index]
       const key = providerKeys[candidate.provider]
       if (!key) continue
       const remainingMs = requestDeadline - Date.now()
@@ -241,6 +249,10 @@ export async function POST(request: Request) {
           : await callOpenRouter(key, candidate.id, body.prompt.trim(), currentSpecification, signal)
         break
       } catch {
+        const nextCandidate = candidates[index + 1]
+        if (plan.selected.tier === 'flagship' && nextCandidate && nextCandidate.tier !== 'flagship' && !allowDowngrade) {
+          return jsonError(409, 'The selected model could not finish. Continue with a lower-tier Lotus model?', 'DOWNGRADE_CONSENT_REQUIRED', headers)
+        }
         // Try one configured fallback, without exposing provider details to the app.
       }
     }
