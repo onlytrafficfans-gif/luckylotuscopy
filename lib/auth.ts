@@ -18,6 +18,11 @@ export const auth = betterAuth({
     minPasswordLength: 8,
     maxPasswordLength: 128,
   },
+  user: {
+    // Required for account owners to remove their account from the iOS app.
+    // The client requests the current password before calling this endpoint.
+    deleteUser: { enabled: true },
+  },
   rateLimit: {
     enabled: true,
     window: 60,
@@ -59,3 +64,4 @@ export const auth = betterAuth({
       }
     : {}),
 })
+
