@@ -1,4 +1,5 @@
 import { betterAuth } from 'better-auth'
+import { expo } from '@better-auth/expo'
 import { sqlite } from '@/lib/db'
 import { postgresPool } from '@/lib/db/postgres'
 
@@ -28,6 +29,8 @@ export const auth = betterAuth({
     },
   },
   trustedOrigins: [
+    'lotusappbuilder://',
+    'lotusappbuilder://*',
     // v0 preview surfaces are served from dynamic sandbox hosts, so trust the
     // whole preview domains via wildcards rather than a single fixed URL.
     'https://*.vercel.run',
@@ -38,6 +41,7 @@ export const auth = betterAuth({
       ? [`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`]
       : []),
   ],
+  plugins: [expo()],
   session: {
     expiresIn: 60 * 60 * 24 * 7, // 7 days
     updateAge: 60 * 60 * 24, // 1 day
