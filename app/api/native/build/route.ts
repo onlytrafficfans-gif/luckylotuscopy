@@ -84,7 +84,7 @@ export async function POST(request: Request) {
     }
     const result = await runBuildAction({
       projectId: typeof body.projectId === 'string' ? body.projectId : null,
-      prompt: body.prompt.trim(),
+      prompt: `Build a complete, runnable single-file browser app. Put all app styles and JavaScript inside the HTML entry file. Use browser storage for user-created data when useful. Do not leave buttons, forms, filters, or navigation decorative; give them sensible working behavior. Avoid CDN libraries, build steps, and remote asset dependencies.\n\nUser request:\n${body.prompt.trim()}`,
       model: 'default',
       currentHtml: typeof body.currentHtml === 'string' ? body.currentHtml : null,
       allowDowngrade: body.allowDowngrade === true,
